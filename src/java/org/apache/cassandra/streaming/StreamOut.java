@@ -113,18 +113,32 @@ public class StreamOut
     */
     public static void transferRanges(StreamOutSession session, Iterable<ColumnFamilyStore> cfses, Collection<Range<Token>> ranges, OperationType type)
     {
+        transferRanges(session, cfses, ranges, type, true);
+    }
+
+    /**
+     * Stream the given ranges to the target endpoint from each of the given CFs.
+    */
+    public static void transferRanges(StreamOutSession session,
+                                      Iterable<ColumnFamilyStore> cfses,
+                                      Collection<Range<Token>> ranges,
+                                      OperationType type,
+                                      boolean flushTables)
+    {
         assert ranges.size() > 0;
         logger.info("Beginning transfer to {}", session.getHost());
         logger.debug("Ranges are {}", StringUtils.join(ranges, ","));
-        flushSSTables(cfses);
-        List<SSTableReader> sstables = Lists.newLinkedList();
 
+        if (flushTables)
+            flushSSTables(cfses);
+
+        List<SSTableReader> sstables = Lists.newLinkedList();
         for (ColumnFamilyStore cfStore : cfses)
         {
-            List<AbstractBounds<RowPosition>> rowRanges = Lists.newLinkedList();
+            List<AbstractBounds<RowPosition>> rowBoundsList = Lists.newLinkedList();
             for (Range<Token> range : ranges)
-                rowRanges.add(range.toRowBounds());
-            ColumnFamilyStore.ViewFragment view = cfStore.markReferenced(rowRanges);
+                rowBoundsList.add(range.toRowBounds());
+            ColumnFamilyStore.ViewFragment view = cfStore.markReferenced(rowBoundsList);
             sstables.addAll(view.sstables);
         }
 

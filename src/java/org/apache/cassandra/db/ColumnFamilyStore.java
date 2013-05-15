@@ -1282,10 +1282,10 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
     abstract class AbstractViewSSTableFinder
     {
         abstract List<SSTableReader> findSSTables(DataTracker.View view);
-        protected List<SSTableReader> sstablesForRange(AbstractBounds<RowPosition> range, DataTracker.View view)
+        protected List<SSTableReader> sstablesForRowBounds(AbstractBounds<RowPosition> rowBounds, DataTracker.View view)
         {
-            RowPosition stopInTree = range.right.isMinimum() ? view.intervalTree.max() : range.right;
-            return view.intervalTree.search(Interval.<RowPosition, SSTableReader>create(range.left, stopInTree));
+            RowPosition stopInTree = rowBounds.right.isMinimum() ? view.intervalTree.max() : rowBounds.right;
+            return view.intervalTree.search(Interval.<RowPosition, SSTableReader>create(rowBounds.left, stopInTree));
         }
     }
 
@@ -1331,32 +1331,32 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     /**
      * @return a ViewFragment containing the sstables and memtables that may need to be merged
-     * for rows within @param bounds, inclusive, according to the interval tree.
+     * for rows within @param rowBounds, inclusive, according to the interval tree.
      */
-    public ViewFragment markReferenced(final AbstractBounds<RowPosition> bounds)
+    public ViewFragment markReferenced(final AbstractBounds<RowPosition> rowBounds)
     {
         return markReferenced(new AbstractViewSSTableFinder()
         {
             List<SSTableReader> findSSTables(DataTracker.View view)
             {
-                return sstablesForRange(bounds, view);
+                return sstablesForRowBounds(rowBounds, view);
             }
         });
     }
 
     /**
      * @return a ViewFragment containing the sstables and memtables that may need to be merged
-     * for rows for all of @param rowRanges, inclusive, according to the interval tree.
+     * for rows for all of @param rowBoundsCollection, inclusive, according to the interval tree.
      */
-    public ViewFragment markReferenced(final Collection<AbstractBounds<RowPosition>> rowRanges)
+    public ViewFragment markReferenced(final Collection<AbstractBounds<RowPosition>> rowBoundsCollection)
     {
         return markReferenced(new AbstractViewSSTableFinder()
         {
             List<SSTableReader> findSSTables(DataTracker.View view)
             {
                 Set<SSTableReader> sstables = Sets.newHashSet();
-                for (AbstractBounds<RowPosition> bounds : rowRanges)
-                    sstables.addAll(sstablesForRange(bounds, view));
+                for (AbstractBounds<RowPosition> rowBounds : rowBoundsCollection)
+                    sstables.addAll(sstablesForRowBounds(rowBounds, view));
 
                 return ImmutableList.copyOf(sstables);
             }
