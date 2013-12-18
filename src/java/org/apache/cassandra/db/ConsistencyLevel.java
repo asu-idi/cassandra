@@ -48,7 +48,7 @@ public enum ConsistencyLevel
     ALL         (5),
     LOCAL_QUORUM(6, true),
     EACH_QUORUM (7),
-    LOCAL_ONE   (8, true);
+    LOCAL_ONE   (10, true);
 
     private static final Logger logger = LoggerFactory.getLogger(ConsistencyLevel.class);
 
@@ -275,10 +275,6 @@ public enum ConsistencyLevel
         {
             case ANY:
                 throw new InvalidRequestException("ANY ConsistencyLevel is only supported for writes");
-            case LOCAL_QUORUM:
-            case LOCAL_ONE:
-                requireNetworkTopologyStrategy(table);
-                break;
             case EACH_QUORUM:
                 throw new InvalidRequestException("EACH_QUORUM ConsistencyLevel is only supported for writes");
         }
@@ -286,14 +282,8 @@ public enum ConsistencyLevel
 
     public void validateForWrite(String table) throws InvalidRequestException
     {
-        switch (this)
-        {
-            case LOCAL_QUORUM:
-            case EACH_QUORUM:
-            case LOCAL_ONE:
-                requireNetworkTopologyStrategy(table);
-                break;
-        }
+        if(this == EACH_QUORUM)
+            requireNetworkTopologyStrategy(table);
     }
 
     public void validateCounterForWrite(CFMetaData metadata) throws InvalidRequestException

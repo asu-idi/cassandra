@@ -34,6 +34,7 @@ import javax.management.Notification;
 import javax.management.NotificationBroadcasterSupport;
 import javax.management.ObjectName;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.*;
 
 import com.google.common.util.concurrent.AtomicDouble;
@@ -318,7 +319,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new IllegalStateException("No configured daemon");
         }
-        daemon.thriftServer.stop();
+        if (daemon.thriftServer != null)
+            daemon.thriftServer.stop();
     }
 
     public boolean isRPCServerRunning()
@@ -395,7 +397,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // make magic happen
         Gossiper.instance.doShadowRound();
 
-        Collection<Token> tokens = new ArrayList<Token>();
         UUID hostId = null;
         // now that we've gossiped at least once, we should be able to find the node we're replacing
         if (Gossiper.instance.getEndpointStateForEndpoint(DatabaseDescriptor.getReplaceAddress())== null)
@@ -405,16 +406,17 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             if (Gossiper.instance.getEndpointStateForEndpoint(DatabaseDescriptor.getReplaceAddress()).getApplicationState(ApplicationState.TOKENS) == null)
                 throw new RuntimeException("Could not find tokens for " + DatabaseDescriptor.getReplaceAddress() + " to replace");
-            tokens = TokenSerializer.deserialize(getPartitioner(), new DataInputStream(new ByteArrayInputStream(getApplicationStateValue(DatabaseDescriptor.getReplaceAddress(), ApplicationState.TOKENS))));
+            Collection<Token> tokens = TokenSerializer.deserialize(getPartitioner(), new DataInputStream(new ByteArrayInputStream(getApplicationStateValue(DatabaseDescriptor.getReplaceAddress(), ApplicationState.TOKENS))));
+            
+            SystemTable.setLocalHostId(hostId); // use the replacee's host Id as our own so we receive hints, etc
+            MessagingService.instance().shutdown();
+            Gossiper.instance.resetEndpointStateMap(); // clean up since we have what we need
+            return tokens;        
         }
         catch (IOException e)
         {
             throw new RuntimeException(e);
         }
-        SystemTable.setLocalHostId(hostId); // use the replacee's host Id as our own so we receive hints, etc
-        MessagingService.instance().shutdown();
-        Gossiper.instance.resetEndpointStateMap(); // clean up since we have what we need
-        return tokens;
     }
 
     public synchronized void initClient() throws IOException, ConfigurationException
@@ -688,6 +690,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 }
             }
             setMode(Mode.JOINING, "schema complete, ready to bootstrap", true);
+            setMode(Mode.JOINING, "waiting for pending range calculation", true);
+            PendingRangeCalculatorService.instance.blockUntilFinished();
+            setMode(Mode.JOINING, "calculation complete, ready to bootstrap", true);
 
 
             if (logger.isDebugEnabled())
@@ -965,6 +970,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             // Dont set any state for the node which is bootstrapping the existing token...
             tokenMetadata.updateNormalTokens(tokens, FBUtilities.getBroadcastAddress());
+            SystemTable.removeEndpoint(DatabaseDescriptor.getReplaceAddress());
         }
         Tracing.instance();
         if (!Gossiper.instance.seenAnySeed())
@@ -1075,14 +1081,60 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public Map<Range<Token>, List<InetAddress>> getRangeToAddressMap(String keyspace)
     {
+        return getRangeToAddressMap(keyspace, tokenMetadata.sortedTokens());
+    }
+
+    public Map<Range<Token>, List<InetAddress>> getRangeToAddressMapInLocalDC(String keyspace)
+    {
+        Predicate<InetAddress> isLocalDC = new Predicate<InetAddress>()
+        {
+            public boolean apply(InetAddress address)
+            {
+                return isLocalDC(address);
+            }
+        };
+
+        Map<Range<Token>, List<InetAddress>> origMap = getRangeToAddressMap(keyspace, getTokensInLocalDC());
+        Map<Range<Token>, List<InetAddress>> filteredMap = Maps.newHashMap();
+        for (Map.Entry<Range<Token>, List<InetAddress>> entry : origMap.entrySet())
+        {
+            List<InetAddress> endpointsInLocalDC = Lists.newArrayList(Collections2.filter(entry.getValue(), isLocalDC));
+            filteredMap.put(entry.getKey(), endpointsInLocalDC);
+        }
+
+        return filteredMap;
+    }
+
+    private List<Token> getTokensInLocalDC()
+    {
+        List<Token> filteredTokens = Lists.newArrayList();
+        for (Token token : tokenMetadata.sortedTokens())
+        {
+            InetAddress endpoint = tokenMetadata.getEndpoint(token);
+            if (isLocalDC(endpoint))
+                filteredTokens.add(token);
+        }
+        return filteredTokens;
+    }
+
+    private boolean isLocalDC(InetAddress targetHost)
+    {
+        String remoteDC = DatabaseDescriptor.getEndpointSnitch().getDatacenter(targetHost);
+        String localDC = DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddress());
+        return remoteDC.equals(localDC);
+    }
+
+    private Map<Range<Token>, List<InetAddress>> getRangeToAddressMap(String keyspace, List<Token> sortedTokens)
+    {
         // some people just want to get a visual representation of things. Allow null and set it to the first
         // non-system table.
         if (keyspace == null)
             keyspace = Schema.instance.getNonSystemTables().get(0);
 
-        List<Range<Token>> ranges = getAllRanges(tokenMetadata.sortedTokens());
+        List<Range<Token>> ranges = getAllRanges(sortedTokens);
         return constructRangeToEndpointMap(keyspace, ranges);
     }
+
 
     /**
      * The same as {@code describeRing(String)} but converts TokenRange to the String for JMX compatibility
@@ -1121,13 +1173,31 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      */
     public List<TokenRange> describeRing(String keyspace) throws InvalidRequestException
     {
+        return describeRing(keyspace, false);
+    }
+
+    /**
+     * The same as {@code describeRing(String)} but considers only the part of the ring formed by nodes in the local DC.
+     */
+    public List<TokenRange> describeLocalRing(String keyspace) throws InvalidRequestException
+    {
+        return describeRing(keyspace, true);
+    }
+
+    private List<TokenRange> describeRing(String keyspace, boolean includeOnlyLocalDC) throws InvalidRequestException
+    {
         if (keyspace == null || Table.open(keyspace).getReplicationStrategy() instanceof LocalStrategy)
             throw new InvalidRequestException("There is no ring for the keyspace: " + keyspace);
 
         List<TokenRange> ranges = new ArrayList<TokenRange>();
         Token.TokenFactory tf = getPartitioner().getTokenFactory();
 
-        for (Map.Entry<Range<Token>, List<InetAddress>> entry : getRangeToAddressMap(keyspace).entrySet())
+        Map<Range<Token>, List<InetAddress>> rangeToAddressMap =
+                includeOnlyLocalDC
+                        ? getRangeToAddressMapInLocalDC(keyspace)
+                        : getRangeToAddressMap(keyspace);
+
+        for (Map.Entry<Range<Token>, List<InetAddress>> entry : rangeToAddressMap.entrySet())
         {
             Range range = entry.getKey();
             List<InetAddress> addresses = entry.getValue();
@@ -1233,7 +1303,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      *   set if the node is dead and has been removed by its REMOVAL_COORDINATOR
      *
      * Note: Any time a node state changes from STATUS_NORMAL, it will not be visible to new nodes. So it follows that
-     * you should never bootstrap a new node during a removetoken, decommission or move.
+     * you should never bootstrap a new node during a removenode, decommission or move.
      */
     public void onChange(InetAddress endpoint, ApplicationState state, VersionedValue value)
     {
@@ -1346,7 +1416,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
 
         tokenMetadata.addBootstrapTokens(tokens, endpoint);
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
 
         if (Gossiper.instance.usesHostId(endpoint))
             tokenMetadata.updateHostId(Gossiper.instance.getHostId(endpoint), endpoint);
@@ -1391,7 +1461,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         Set<Token> tokensToUpdateInSystemTable = new HashSet<Token>();
         Set<Token> localTokensToRemove = new HashSet<Token>();
         Set<InetAddress> endpointsToRemove = new HashSet<InetAddress>();
-        Multimap<InetAddress, Token> epToTokenCopy = getTokenMetadata().getEndpointToTokenMapForReading();
 
         for (final Token token : tokens)
         {
@@ -1445,6 +1514,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
                 // currentOwner is no longer current, endpoint is.  Keep track of these moves, because when
                 // a host no longer has any tokens, we'll want to remove it.
+                Multimap<InetAddress, Token> epToTokenCopy = getTokenMetadata().getEndpointToTokenMapForReading();
                 epToTokenCopy.get(currentOwner).remove(token);
                 if (epToTokenCopy.get(currentOwner).size() < 1)
                     endpointsToRemove.add(currentOwner);
@@ -1488,7 +1558,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             }
         }
 
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     /**
@@ -1523,7 +1593,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // at this point the endpoint is certainly a member with this token, so let's proceed
         // normally
         tokenMetadata.addLeavingEndpoint(endpoint);
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     /**
@@ -1561,7 +1631,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         tokenMetadata.addMovingEndpoint(token, endpoint);
 
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     /**
@@ -1581,11 +1651,11 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         logger.debug("Tokens {} are relocating to {}", tokens, endpoint);
         tokenMetadata.addRelocatingTokens(tokens, endpoint);
 
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     /**
-     * Handle notification that a node being actively removed from the ring via 'removetoken'
+     * Handle notification that a node being actively removed from the ring via 'removenode'
      *
      * @param endpoint node
      * @param pieces either REMOVED_TOKEN (node is gone) or REMOVING_TOKEN (replicas need to be restored)
@@ -1596,7 +1666,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         if (endpoint.equals(FBUtilities.getBroadcastAddress()))
         {
-            logger.info("Received removeToken gossip about myself. Is this node rejoining after an explicit removetoken?");
+            logger.info("Received removenode gossip about myself. Is this node rejoining after an explicit removenode?");
             try
             {
                 drain();
@@ -1623,7 +1693,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
                 // Note that the endpoint is being removed
                 tokenMetadata.addLeavingEndpoint(endpoint);
-                calculatePendingRanges();
+                PendingRangeCalculatorService.instance.update();
 
                 // find the endpoint coordinating this removal that we need to notify when we're done
                 String[] coordinator = Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.REMOVAL_COORDINATOR).value.split(VersionedValue.DELIMITER_STR, -1);
@@ -1646,12 +1716,13 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         removeEndpoint(endpoint);
         tokenMetadata.removeEndpoint(endpoint);
         tokenMetadata.removeBootstrapTokens(tokens);
+
         if (!isClientMode)
         {
             for (IEndpointLifecycleSubscriber subscriber : lifecycleSubscribers)
                 subscriber.onLeaveCluster(endpoint);
         }
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     private void excise(Collection<Token> tokens, InetAddress endpoint, long expireTime)
@@ -1691,124 +1762,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
-    /**
-     * Calculate pending ranges according to bootsrapping and leaving nodes. Reasoning is:
-     *
-     * (1) When in doubt, it is better to write too much to a node than too little. That is, if
-     * there are multiple nodes moving, calculate the biggest ranges a node could have. Cleaning
-     * up unneeded data afterwards is better than missing writes during movement.
-     * (2) When a node leaves, ranges for other nodes can only grow (a node might get additional
-     * ranges, but it will not lose any of its current ranges as a result of a leave). Therefore
-     * we will first remove _all_ leaving tokens for the sake of calculation and then check what
-     * ranges would go where if all nodes are to leave. This way we get the biggest possible
-     * ranges with regard current leave operations, covering all subsets of possible final range
-     * values.
-     * (3) When a node bootstraps, ranges of other nodes can only get smaller. Without doing
-     * complex calculations to see if multiple bootstraps overlap, we simply base calculations
-     * on the same token ring used before (reflecting situation after all leave operations have
-     * completed). Bootstrapping nodes will be added and removed one by one to that metadata and
-     * checked what their ranges would be. This will give us the biggest possible ranges the
-     * node could have. It might be that other bootstraps make our actual final ranges smaller,
-     * but it does not matter as we can clean up the data afterwards.
-     *
-     * NOTE: This is heavy and ineffective operation. This will be done only once when a node
-     * changes state in the cluster, so it should be manageable.
-     */
-    private void calculatePendingRanges()
-    {
-        for (String table : Schema.instance.getNonSystemTables())
-            calculatePendingRanges(Table.open(table).getReplicationStrategy(), table);
-    }
-
-    // public & static for testing purposes
-    public static void calculatePendingRanges(AbstractReplicationStrategy strategy, String table)
-    {
-        TokenMetadata tm = StorageService.instance.getTokenMetadata();
-        Multimap<Range<Token>, InetAddress> pendingRanges = HashMultimap.create();
-        BiMultiValMap<Token, InetAddress> bootstrapTokens = tm.getBootstrapTokens();
-        Set<InetAddress> leavingEndpoints = tm.getLeavingEndpoints();
-
-        if (bootstrapTokens.isEmpty() && leavingEndpoints.isEmpty() && tm.getMovingEndpoints().isEmpty() && tm.getRelocatingRanges().isEmpty())
-        {
-            if (logger.isDebugEnabled())
-                logger.debug("No bootstrapping, leaving or moving nodes, and no relocating tokens -> empty pending ranges for {}", table);
-            tm.setPendingRanges(table, pendingRanges);
-            return;
-        }
-
-        Multimap<InetAddress, Range<Token>> addressRanges = strategy.getAddressRanges();
-
-        // Copy of metadata reflecting the situation after all leave operations are finished.
-        TokenMetadata allLeftMetadata = tm.cloneAfterAllLeft();
-
-        // get all ranges that will be affected by leaving nodes
-        Set<Range<Token>> affectedRanges = new HashSet<Range<Token>>();
-        for (InetAddress endpoint : leavingEndpoints)
-            affectedRanges.addAll(addressRanges.get(endpoint));
-
-        // for each of those ranges, find what new nodes will be responsible for the range when
-        // all leaving nodes are gone.
-        for (Range<Token> range : affectedRanges)
-        {
-            Set<InetAddress> currentEndpoints = ImmutableSet.copyOf(strategy.calculateNaturalEndpoints(range.right, tm.cloneOnlyTokenMap()));
-            Set<InetAddress> newEndpoints = ImmutableSet.copyOf(strategy.calculateNaturalEndpoints(range.right, allLeftMetadata));
-            pendingRanges.putAll(range, Sets.difference(newEndpoints, currentEndpoints));
-        }
-
-        // At this stage pendingRanges has been updated according to leave operations. We can
-        // now continue the calculation by checking bootstrapping nodes.
-
-        // For each of the bootstrapping nodes, simply add and remove them one by one to
-        // allLeftMetadata and check in between what their ranges would be.
-        for (InetAddress endpoint : bootstrapTokens.inverse().keySet())
-        {
-            Collection<Token> tokens = bootstrapTokens.inverse().get(endpoint);
-
-            allLeftMetadata.updateNormalTokens(tokens, endpoint);
-            for (Range<Token> range : strategy.getAddressRanges(allLeftMetadata).get(endpoint))
-                pendingRanges.put(range, endpoint);
-            allLeftMetadata.removeEndpoint(endpoint);
-        }
-
-        // At this stage pendingRanges has been updated according to leaving and bootstrapping nodes.
-        // We can now finish the calculation by checking moving and relocating nodes.
-
-        // For each of the moving nodes, we do the same thing we did for bootstrapping:
-        // simply add and remove them one by one to allLeftMetadata and check in between what their ranges would be.
-        for (Pair<Token, InetAddress> moving : tm.getMovingEndpoints())
-        {
-            InetAddress endpoint = moving.right; // address of the moving node
-
-            //  moving.left is a new token of the endpoint
-            allLeftMetadata.updateNormalToken(moving.left, endpoint);
-
-            for (Range<Token> range : strategy.getAddressRanges(allLeftMetadata).get(endpoint))
-            {
-                pendingRanges.put(range, endpoint);
-            }
-
-            allLeftMetadata.removeEndpoint(endpoint);
-        }
-
-        // Ranges being relocated.
-        for (Map.Entry<Token, InetAddress> relocating : tm.getRelocatingRanges().entrySet())
-        {
-            InetAddress endpoint = relocating.getValue(); // address of the moving node
-            Token token = relocating.getKey();
-
-            allLeftMetadata.updateNormalToken(token, endpoint);
-
-            for (Range<Token> range : strategy.getAddressRanges(allLeftMetadata).get(endpoint))
-                pendingRanges.put(range, endpoint);
-
-            allLeftMetadata.removeEndpoint(endpoint);
-        }
-
-        tm.setPendingRanges(table, pendingRanges);
-
-        if (logger.isDebugEnabled())
-            logger.debug("Pending ranges:\n" + (pendingRanges.isEmpty() ? "<empty>" : tm.printPendingRanges()));
-    }
 
     /**
      * Finds living endpoints responsible for the given ranges
@@ -1954,7 +1907,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         TokenMetadata temp = tokenMetadata.cloneAfterAllLeft();
 
-        // endpoint might or might not be 'leaving'. If it was not leaving (that is, removetoken
+        // endpoint might or might not be 'leaving'. If it was not leaving (that is, removenode
         // command was used), it is still present in temp and must be removed.
         if (temp.isMember(endpoint))
             temp.removeEndpoint(endpoint);
@@ -2010,7 +1963,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     public void onRemove(InetAddress endpoint)
     {
         tokenMetadata.removeEndpoint(endpoint);
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     public void onDead(InetAddress endpoint, EndpointState state)
@@ -2800,7 +2753,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         Gossiper.instance.addLocalApplicationState(ApplicationState.STATUS, valueFactory.leaving(getLocalTokens()));
         tokenMetadata.addLeavingEndpoint(FBUtilities.getBroadcastAddress());
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
     }
 
     public void decommission() throws InterruptedException
@@ -2809,6 +2762,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             throw new UnsupportedOperationException("local node is not a member of the token ring yet");
         if (tokenMetadata.cloneAfterAllLeft().sortedTokens().size() < 2)
             throw new UnsupportedOperationException("no other normal nodes in the ring; decommission would be pointless");
+        PendingRangeCalculatorService.instance.blockUntilFinished();
         for (String table : Schema.instance.getNonSystemTables())
         {
             if (tokenMetadata.getPendingRanges(table, FBUtilities.getBroadcastAddress()).size() > 0)
@@ -2840,7 +2794,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         SystemTable.setBootstrapState(SystemTable.BootstrapState.NEEDS_BOOTSTRAP);
         tokenMetadata.removeEndpoint(FBUtilities.getBroadcastAddress());
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
 
         Gossiper.instance.addLocalApplicationState(ApplicationState.STATUS, valueFactory.left(getLocalTokens(),Gossiper.computeExpireTime()));
         int delay = Math.max(RING_DELAY, Gossiper.intervalInMillis * 2);
@@ -2971,6 +2925,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         List<String> tablesToProcess = Schema.instance.getNonSystemTables();
 
+        PendingRangeCalculatorService.instance.blockUntilFinished();
         // checking if data is moving to this node
         for (String table : tablesToProcess)
         {
@@ -3247,7 +3202,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
         else
         {
-            throw new UnsupportedOperationException("No tokens to force removal on, call 'removetoken' first");
+            throw new UnsupportedOperationException("No tokens to force removal on, call 'removenode' first");
         }
     }
 
@@ -3283,7 +3238,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             logger.warn("Node " + endpoint + " is already being removed, continuing removal anyway");
 
         if (!replicatingNodes.isEmpty())
-            throw new UnsupportedOperationException("This node is already processing a removal. Wait for it to complete, or use 'removetoken force' if this has failed.");
+            throw new UnsupportedOperationException("This node is already processing a removal. Wait for it to complete, or use 'removenode force' if this has failed.");
 
         // Find the endpoints that are going to become responsible for data
         for (String table : Schema.instance.getNonSystemTables())
@@ -3307,7 +3262,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         removingNode = endpoint;
 
         tokenMetadata.addLeavingEndpoint(endpoint);
-        calculatePendingRanges();
+        PendingRangeCalculatorService.instance.update();
+
         // the gossiper will handle spoofing this node's state to REMOVING_TOKEN for us
         // we add our own token so other nodes to let us know when they're done
         Gossiper.instance.advertiseRemoving(endpoint, hostId, localHostId);

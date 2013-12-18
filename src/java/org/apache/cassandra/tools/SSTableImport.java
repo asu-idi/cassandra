@@ -155,8 +155,18 @@ public class SSTableImport
                     }
                 }
 
-                value = isDeleted() ? ByteBufferUtil.hexToBytes((String) fields.get(1))
-                                    : stringAsType((String) fields.get(1), meta.getValueValidator(meta.getColumnDefinitionFromColumnName(name)));
+                if (isDeleted())
+                {
+                    value = ByteBufferUtil.hexToBytes((String) fields.get(1));
+                }
+                else if (isRangeTombstone())
+                {
+                    value = comparator.fromString((String)fields.get(1));
+                }
+                else
+                {
+                    value = stringAsType((String) fields.get(1), meta.getValueValidator(meta.getColumnDefinitionFromColumnName(name)));
+                }
             }
         }
 
