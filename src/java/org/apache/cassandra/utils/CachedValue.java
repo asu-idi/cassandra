@@ -53,11 +53,12 @@ public abstract class CachedValue<T>
                 {
                     if (current == null)
                         current = load();
+
+                    // "demote" back to a read lock, done before releasing write lock to follow lock ordering rules
+                    lock.readLock().lock();
                 }
                 finally
                 {
-                    // "demote" back to a read lock, done before releasing write lock to follow lock ordering rules
-                    lock.readLock().lock();
                     lock.writeLock().unlock();
                 }
             }

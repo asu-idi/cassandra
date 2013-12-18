@@ -23,7 +23,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -97,7 +96,8 @@ public class TokenMetadata
     private volatile ArrayList<Token> sortedTokens;
 
     private final Topology topology;
-    private volatile long endpointVersion = 0;
+    /* list of subscribers that are notified when the tokenToEndpointMap changed */
+    private final CopyOnWriteArrayList<AbstractReplicationStrategy> subscribers = new CopyOnWriteArrayList<AbstractReplicationStrategy>();
 
     private static final Comparator<InetAddress> inetaddressCmp = new Comparator<InetAddress>()
     {
@@ -428,12 +428,13 @@ public class TokenMetadata
             leavingEndpoints.remove(endpoint);
             endpointToHostIdMap.remove(endpoint);
             sortedTokens = sortTokens();
-            invalidateCaches();
         }
         finally
         {
             lock.writeLock().unlock();
         }
+
+        invalidateCaches();
     }
 
     /**
@@ -455,12 +456,13 @@ public class TokenMetadata
                     break;
                 }
             }
-            invalidateCaches();
         }
         finally
         {
             lock.writeLock().unlock();
         }
+
+        invalidateCaches();
     }
 
     /**
@@ -968,32 +970,22 @@ public class TokenMetadata
         return sb.toString();
     }
 
-    public long getEndpointVersion()
+    public void invalidateCaches()
     {
-        lock.readLock().lock();
-
-        try
+        for (AbstractReplicationStrategy subscriber : subscribers)
         {
-            return endpointVersion;
-        }
-        finally
-        {
-            lock.readLock().unlock();
+            subscriber.invalidateCachedTokenEndpointValues();
         }
     }
 
-    public void invalidateCaches()
+    public void register(AbstractReplicationStrategy subscriber)
     {
-        lock.writeLock().lock();
+        subscribers.add(subscriber);
+    }
 
-        try
-        {
-            endpointVersion += 1;
-        }
-        finally
-        {
-            lock.writeLock().unlock();
-        }
+    public void unregister(AbstractReplicationStrategy subscriber)
+    {
+        subscribers.remove(subscriber);
     }
 
     public Collection<InetAddress> pendingEndpointsFor(Token token, String table)

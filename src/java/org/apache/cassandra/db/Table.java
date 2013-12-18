@@ -275,6 +275,9 @@ public class Table
 
     public void createReplicationStrategy(KSMetaData ksm)
     {
+        if (replicationStrategy != null)
+            StorageService.instance.getTokenMetadata().unregister(replicationStrategy);
+
         replicationStrategy = AbstractReplicationStrategy.createReplicationStrategy(ksm.name,
                                                                                     ksm.strategyClass,
                                                                                     StorageService.instance.getTokenMetadata(),
