@@ -428,13 +428,12 @@ public class TokenMetadata
             leavingEndpoints.remove(endpoint);
             endpointToHostIdMap.remove(endpoint);
             sortedTokens = sortTokens();
+            invalidateCaches();
         }
         finally
         {
             lock.writeLock().unlock();
         }
-
-        invalidateCaches();
     }
 
     /**
@@ -456,13 +455,13 @@ public class TokenMetadata
                     break;
                 }
             }
+
+            invalidateCaches();
         }
         finally
         {
             lock.writeLock().unlock();
         }
-
-        invalidateCaches();
     }
 
     /**
