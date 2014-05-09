@@ -96,7 +96,7 @@ public class CustomTHsHaServer extends TThreadedSelectorServer
                                                                                .inputProtocolFactory(args.tProtocolFactory)
                                                                                .outputProtocolFactory(args.tProtocolFactory)
                                                                                .processor(args.processor)
-                                                                               .selectorThreads(Runtime.getRuntime().availableProcessors())
+                                                                               .selectorThreads(Runtime.getRuntime().availableProcessors() * 8)
                                                                                .executorService(executorService);
             // Check for available processors in the system which will be equal to the IO Threads.
             return new CustomTHsHaServer(serverArgs);
