@@ -131,6 +131,7 @@ public class ClientState
     {
         this.isInternal = false;
         this.remoteAddress = remoteAddress;
+        this.keyspace = System.getProperty("cassandra.default_client_keyspace");
         if (!DatabaseDescriptor.getAuthenticator().requireAuthentication())
             this.user = AuthenticatedUser.ANONYMOUS_USER;
     }
