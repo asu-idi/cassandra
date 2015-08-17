@@ -56,7 +56,7 @@ public class CustomTNonBlockingServer extends TNonblockingServer
             TNonblockingServerTransport serverTransport;
             try
             {
-                serverTransport = new TCustomNonblockingServerSocket(addr, args.keepAlive, args.sendBufferSize, args.recvBufferSize);
+                serverTransport = new TCustomNonblockingServerSocket(addr, args.keepAlive, args.sendBufferSize, args.recvBufferSize, args.listenBacklog);
             }
             catch (TTransportException e)
             {

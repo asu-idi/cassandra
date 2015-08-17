@@ -34,9 +34,12 @@ public class TCustomNonblockingServerSocket extends TNonblockingServerSocket
     private final Integer sendBufferSize;
     private final Integer recvBufferSize;
 
-    public TCustomNonblockingServerSocket(InetSocketAddress bindAddr, boolean keepAlive, Integer sendBufferSize, Integer recvBufferSize) throws TTransportException
+    public TCustomNonblockingServerSocket(InetSocketAddress bindAddr, boolean keepAlive, Integer sendBufferSize, Integer recvBufferSize, Integer backlog) throws TTransportException
     {
-        super(bindAddr);
+        super(new NonblockingAbstractServerSocketArgs()
+            .bindAddr(bindAddr)
+            .backlog(backlog)
+        );
         this.keepAlive = keepAlive;
         this.sendBufferSize = sendBufferSize;
         this.recvBufferSize = recvBufferSize;
