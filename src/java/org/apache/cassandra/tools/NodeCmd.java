@@ -144,6 +144,7 @@ public class NodeCmd
         PAUSEHANDOFF,
         PROXYHISTOGRAMS,
         REBUILD,
+        REBUILDRANGE,
         REFRESH,
         REMOVETOKEN,
         REMOVENODE,
@@ -1289,7 +1290,11 @@ public class NodeCmd
                     if (arguments.length > 1) { badUse("Too many arguments."); }
                     probe.rebuild(arguments.length == 1 ? arguments[0] : null);
                     break;
-
+                case REBUILDRANGE:
+                    if (arguments.length > 4) { badUse("Too many arguments."); }
+                    if (arguments.length < 3) { badUse("Missing arguments."); }
+                    probe.rebuildRange(arguments[0], arguments[1], arguments.length == 3 ? arguments[2] : null);
+                    break;
                 case REMOVETOKEN :
                     System.err.println("Warn: removetoken is deprecated, please use removenode instead");
                 case REMOVENODE  :

@@ -842,6 +842,10 @@ public class NodeProbe
         ssProxy.rebuild(sourceDc);
     }
 
+    public void rebuildRange(String keyspace, String tokens, String sourceDc) {
+        ssProxy.rebuildRange(keyspace, tokens, sourceDc);
+    }
+
     public List<String> sampleKeyRange()
     {
         return ssProxy.sampleKeyRange();

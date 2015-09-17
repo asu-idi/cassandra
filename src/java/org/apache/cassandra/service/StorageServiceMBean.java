@@ -419,6 +419,14 @@ public interface StorageServiceMBean extends NotificationEmitter
      */
     public void rebuild(String sourceDc);
 
+    /**
+     * rebuild specified ranges of tokens.
+     *
+     * Tokens are in the format of:
+     * "(start_token_1,end_token_1],(start_token_2,end_token_2],...(start_token_n,end_token_n]"
+     */
+    public void rebuildRange(String keyspace, String tokens, String sourceDc);
+
     public void bulkLoad(String directory);
 
     public void rescheduleFailedDeletions();

@@ -920,6 +920,34 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         streamer.fetch();
     }
 
+    public void rebuildRange(String keyspace, String tokens, String sourceDc)
+    {
+        logger.info(String.format("rebuild from dc: %s, for keyspace: %s, for token ranges: [%s]",
+                    sourceDc == null ? "(any dc)" : sourceDc,
+                    keyspace,
+                    tokens));
+
+        RangeStreamer streamer = new RangeStreamer(tokenMetadata, FBUtilities.getBroadcastAddress(), OperationType.REBUILD);
+        streamer.addSourceFilter(new RangeStreamer.FailureDetectorSourceFilter(FailureDetector.instance));
+        if (sourceDc != null)
+            streamer.addSourceFilter(new RangeStreamer.SingleDatacenterFilter(DatabaseDescriptor.getEndpointSnitch(), sourceDc));
+
+        Token.TokenFactory factory = StorageService.getPartitioner().getTokenFactory();
+        tokens = tokens + ",";
+        for (String token : tokens.split("],")) {
+            String[] parts = token.split(",");
+            String startToken = parts[0].trim().substring(1);   // remove the "("
+            String endToken = parts[1].trim();
+            Range<Token> rebuildRange = new Range<Token>(factory.fromString(startToken),
+              factory.fromString(endToken));
+
+            logger.info(String.format("adding range: (%s,%s]", startToken, endToken));
+            streamer.addRanges(keyspace, Arrays.asList(rebuildRange));
+        }
+
+        streamer.fetch();
+    }
+
     public void setStreamThroughputMbPerSec(int value)
     {
         DatabaseDescriptor.setStreamThroughputOutboundMegabitsPerSec(value);
