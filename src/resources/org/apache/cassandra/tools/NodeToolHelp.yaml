@@ -130,6 +130,9 @@ commands:
   - name: rebuild [src-dc-name]
     help: |
       Rebuild data by streaming from other nodes (similarly to bootstrap)
+  - name: rebuildrange keyspace start_token end_token [src-dc-name]
+    help: |
+      Rebuild only one range data by streaming from other nodes (similarly to bootstrap)
   - name: settraceprobability [value]
     help: |
       Sets the probability for tracing any given request to value. 0 disables, 1 enables for all requests, 0 is the default
