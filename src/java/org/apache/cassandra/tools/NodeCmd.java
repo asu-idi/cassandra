@@ -17,12 +17,30 @@
  */
 package org.apache.cassandra.tools;
 
+import java.io.*;
+import java.lang.management.MemoryUsage;
+import java.net.ConnectException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Maps;
-import org.apache.cassandra.concurrent.JMXEnabledThreadPoolExecutorMBean;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.utils.FBUtilities;
+import org.apache.commons.cli.*;
+import org.yaml.snakeyaml.Loader;
+import org.yaml.snakeyaml.TypeDescription;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
+import org.apache.cassandra.concurrent.JMXEnabledThreadPoolExecutorMBean;
 import org.apache.cassandra.db.ColumnFamilyStoreMBean;
 import org.apache.cassandra.db.Table;
 import org.apache.cassandra.db.compaction.CompactionManagerMBean;
@@ -36,24 +54,7 @@ import org.apache.cassandra.service.PBSPredictionResult;
 import org.apache.cassandra.service.PBSPredictorMBean;
 import org.apache.cassandra.service.StorageProxyMBean;
 import org.apache.cassandra.utils.EstimatedHistogram;
-import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
-import org.apache.commons.cli.*;
-import org.yaml.snakeyaml.Loader;
-import org.yaml.snakeyaml.TypeDescription;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.Constructor;
-
-import java.io.*;
-import java.lang.management.MemoryUsage;
-import java.net.ConnectException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.ExecutionException;
 
 public class NodeCmd
 {
@@ -143,7 +144,6 @@ public class NodeCmd
         PAUSEHANDOFF,
         PROXYHISTOGRAMS,
         REBUILD,
-        REBUILDRANGE,
         REFRESH,
         REMOVETOKEN,
         REMOVENODE,
@@ -799,8 +799,8 @@ public class NodeCmd
     {
         ColumnFamilyStoreMBean cfsProxy = probe.getCfsProxy(ks, cf);
         outs.println("Current compaction thresholds for " + ks + "/" + cf + ": \n" +
-          " min = " + cfsProxy.getMinimumCompactionThreshold() + ", " +
-          " max = " + cfsProxy.getMaximumCompactionThreshold());
+                     " min = " + cfsProxy.getMinimumCompactionThreshold() + ", " +
+                     " max = " + cfsProxy.getMaximumCompactionThreshold());
     }
 
     /**
@@ -1289,11 +1289,7 @@ public class NodeCmd
                     if (arguments.length > 1) { badUse("Too many arguments."); }
                     probe.rebuild(arguments.length == 1 ? arguments[0] : null);
                     break;
-                case REBUILDRANGE:
-                    if (arguments.length > 4) { badUse("Too many arguments."); }
-                    if (arguments.length < 3) { badUse("Missing arguments."); }
-                    probe.rebuildRange(arguments[0], arguments[1], arguments[2], arguments.length == 4 ? arguments[3] : null);
-                    break;
+
                 case REMOVETOKEN :
                     System.err.println("Warn: removetoken is deprecated, please use removenode instead");
                 case REMOVENODE  :
@@ -1451,7 +1447,8 @@ public class NodeCmd
         catch (IOException ioe)
         {
             //quietly ignore any errors about not being able to write out history
-        } finally
+        }
+        finally
         {
             FileUtils.closeQuietly(writer);
         }
@@ -1579,11 +1576,11 @@ public class NodeCmd
                     else
                         probe.forceRepairAsync(System.out, keyspace, snapshot, localDC, primaryRange, columnFamilies);
                     break;
-                case FLUSH:
+                case FLUSH   :
                     try { probe.forceTableFlush(keyspace, columnFamilies); }
                     catch (ExecutionException ee) { err(ee, "Error occurred during flushing"); }
                     break;
-                case COMPACT:
+                case COMPACT :
                     try { probe.forceTableCompaction(keyspace, columnFamilies); }
                     catch (ExecutionException ee) { err(ee, "Error occurred during compaction"); }
                     break;

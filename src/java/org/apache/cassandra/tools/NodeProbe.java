@@ -17,7 +17,28 @@
  */
 package org.apache.cassandra.tools;
 
+import java.io.IOException;
+import java.io.PrintStream;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryUsage;
+import java.lang.management.RuntimeMXBean;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
+import javax.management.*;
+import javax.management.remote.JMXConnectionNotification;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
+
 import com.google.common.collect.Iterables;
+
 import org.apache.cassandra.concurrent.JMXEnabledThreadPoolExecutorMBean;
 import org.apache.cassandra.db.ColumnFamilyStoreMBean;
 import org.apache.cassandra.db.HintedHandOffManager;
@@ -33,26 +54,6 @@ import org.apache.cassandra.service.*;
 import org.apache.cassandra.streaming.StreamingService;
 import org.apache.cassandra.streaming.StreamingServiceMBean;
 import org.apache.cassandra.utils.SimpleCondition;
-
-import javax.management.*;
-import javax.management.remote.JMXConnectionNotification;
-import javax.management.remote.JMXConnector;
-import javax.management.remote.JMXConnectorFactory;
-import javax.management.remote.JMXServiceURL;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
-import java.lang.management.MemoryUsage;
-import java.lang.management.RuntimeMXBean;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.Condition;
 
 /**
  * JMX client operations for Cassandra.
@@ -244,7 +245,7 @@ public class NodeProbe
         {
             jmxc.addConnectionNotificationListener(runner, null, null);
             ssProxy.addNotificationListener(runner, null, null);
-            if (!runner.repairRangeAndWait(ssProxy, isSequential, isLocal, startToken, endToken))
+            if (!runner.repairRangeAndWait(ssProxy,  isSequential, isLocal, startToken, endToken))
                 failed = true;
         }
         catch (Exception e)
@@ -839,10 +840,6 @@ public class NodeProbe
     public void rebuild(String sourceDc)
     {
         ssProxy.rebuild(sourceDc);
-    }
-
-    public void rebuildRange(String keyspace, String startToken, String endToken, String sourceDc) {
-        ssProxy.rebuildRange(keyspace, startToken, endToken, sourceDc);
     }
 
     public List<String> sampleKeyRange()

@@ -17,15 +17,17 @@
  */
 package org.apache.cassandra.service;
 
-import javax.management.NotificationEmitter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
+import javax.management.NotificationEmitter;
 
 public interface StorageServiceMBean extends NotificationEmitter
 {
@@ -416,8 +418,6 @@ public interface StorageServiceMBean extends NotificationEmitter
      * @param sourceDc Name of DC from which to select sources for streaming or null to pick any node
      */
     public void rebuild(String sourceDc);
-
-    public void rebuildRange(String keyspace, String startToken, String endToken, String sourceDc);
 
     public void bulkLoad(String directory);
 
