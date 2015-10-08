@@ -99,6 +99,8 @@ public class HintedHandOffManager implements HintedHandOffManagerMBean
 
     static final CompositeType comparator = CompositeType.getInstance(Arrays.<AbstractType<?>>asList(UUIDType.instance, Int32Type.instance));
     static final int maxHintTTL = Integer.parseInt(System.getProperty("cassandra.maxHintTTL", String.valueOf(Integer.MAX_VALUE)));
+    static final boolean skipCompaction = Boolean.parseBoolean(System.getProperty("cassandra.skipHintCompaction", String.valueOf(false)));
+    static final int maxHintSSTables = Integer.parseInt(System.getProperty("cassandra.maxHintSSTables", "20"));
 
     private final NonBlockingHashSet<InetAddress> queuedDeliveries = new NonBlockingHashSet<InetAddress>();
 
@@ -255,6 +257,9 @@ public class HintedHandOffManager implements HintedHandOffManagerMBean
         if (descriptors.isEmpty())
             return;
 
+        if (skipCompaction && descriptors.size() <= maxHintSSTables)
+            return;
+
         try
         {
             CompactionManager.instance.submitUserDefined(hintStore, descriptors, (int) (System.currentTimeMillis() / 1000)).get();
@@ -296,6 +301,8 @@ public class HintedHandOffManager implements HintedHandOffManagerMBean
         {
             Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
             waited += 1000;
+            logger.debug("schema for {}: {}", endpoint, gossiper.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.SCHEMA).value);
+            logger.debug("local schema {}", gossiper.getEndpointStateForEndpoint(FBUtilities.getBroadcastAddress()).getApplicationState(ApplicationState.SCHEMA).value);
             if (waited > 2 * StorageService.RING_DELAY)
                 throw new TimeoutException("Could not reach schema agreement with " + endpoint + " in " + 2 * StorageService.RING_DELAY + "ms");
         }
