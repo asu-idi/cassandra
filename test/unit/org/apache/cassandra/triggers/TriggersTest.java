@@ -67,7 +67,7 @@ public class TriggersTest extends SchemaLoader
         StorageService.instance.initServer(0);
         if (thriftServer == null || ! thriftServer.isRunning())
         {
-            thriftServer = new ThriftServer(InetAddress.getLocalHost(), 9170);
+            thriftServer = new ThriftServer(InetAddress.getLocalHost(), 9170, 50);
             thriftServer.start();
         }
 
