@@ -379,14 +379,18 @@ public class Memtable
 
                 if (writer.getFilePointer() > 0)
                 {
+                    long bytesFlushed = writer.getOnDiskFilePointer();
                     logger.info(String.format("Completed flushing %s (%s) for commitlog position %s",
                                               writer.getFilename(),
-                                              FBUtilities.prettyPrintMemory(writer.getOnDiskFilePointer()),
+                                              FBUtilities.prettyPrintMemory(bytesFlushed),
                                               context));
 
                     writer.isolateReferences();
                     // temp sstables should contain non-repaired data.
                     ssTable = writer.closeAndOpenReader();
+
+                    // update metrics
+                    cfs.metric.bytesFlushed.inc(bytesFlushed);
                 }
                 else
                 {

@@ -76,6 +76,8 @@ public class ColumnFamilyMetrics
     public final LatencyMetrics writeLatency;
     /** Estimated number of tasks pending for this column family */
     public final Counter pendingFlushes;
+    /** Total number of bytes flushed since server [re]start */
+    public final Counter bytesFlushed;
     /** Estimate of number of pending compactios for this CF */
     public final Gauge<Integer> pendingCompactions;
     /** Number of SSTables on disk for this CF */
@@ -350,6 +352,7 @@ public class ColumnFamilyMetrics
         writeLatency = new LatencyMetrics(factory, "Write", cfs.keyspace.metric.writeLatency, globalWriteLatency);
         rangeLatency = new LatencyMetrics(factory, "Range", cfs.keyspace.metric.rangeLatency, globalRangeLatency);
         pendingFlushes = createColumnFamilyCounter("PendingFlushes");
+        bytesFlushed = Metrics.newCounter(factory.createMetricName("BytesFlushed"));
         pendingCompactions = createColumnFamilyGauge("PendingCompactions", new Gauge<Integer>()
         {
             public Integer value()
