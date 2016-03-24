@@ -401,12 +401,15 @@ public class Memtable implements Comparable<Memtable>
                         writer.append((DecoratedKey)entry.getKey(), cf);
                 }
 
+                long bytesFlushed = writer.getFilePointer();
                 if (writer.getFilePointer() > 0)
                 {
                     logger.debug(String.format("Completed flushing %s (%s) for commitlog position %s",
                                               writer.getFilename(),
-                                              FBUtilities.prettyPrintMemory(writer.getOnDiskFilePointer()),
+                                              FBUtilities.prettyPrintMemory(bytesFlushed),
                                               context));
+                // Update the metrics
+                cfs.metric.bytesFlushed.inc(bytesFlushed);
 
                     // temp sstables should contain non-repaired data.
                     ssTable = writer.finish(true);
