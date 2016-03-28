@@ -508,7 +508,9 @@ public class SecondaryIndexManager
      */
     public Updater gcUpdaterFor(DecoratedKey key)
     {
-        return new GCUpdater(key);
+        return (indexesByColumn.isEmpty() && rowLevelIndexMap.isEmpty())
+               ? nullUpdater
+               : new GCUpdater(key);
     }
 
     /**
