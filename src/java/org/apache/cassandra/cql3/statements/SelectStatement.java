@@ -60,6 +60,7 @@ import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.cql3.statements.RequestValidations.checkFalse;
 import static org.apache.cassandra.cql3.statements.RequestValidations.checkNotNull;
+import static org.apache.cassandra.cql3.statements.RequestValidations.checkNull;
 import static org.apache.cassandra.cql3.statements.RequestValidations.checkTrue;
 import static org.apache.cassandra.cql3.statements.RequestValidations.invalidRequest;
 import static org.apache.cassandra.utils.ByteBufferUtil.UNSET_BYTE_BUFFER;
@@ -83,6 +84,7 @@ public class SelectStatement implements CQLStatement
     public final Parameters parameters;
     private final Selection selection;
     private final Term limit;
+    private final Term perPartitionLimit;
 
     private final StatementRestrictions restrictions;
 
@@ -105,7 +107,8 @@ public class SelectStatement implements CQLStatement
                            StatementRestrictions restrictions,
                            boolean isReversed,
                            Comparator<List<ByteBuffer>> orderingComparator,
-                           Term limit)
+                           Term limit,
+                           Term perPartitionLimit)
     {
         this.cfm = cfm;
         this.boundTerms = boundTerms;
@@ -115,6 +118,7 @@ public class SelectStatement implements CQLStatement
         this.orderingComparator = orderingComparator;
         this.parameters = parameters;
         this.limit = limit;
+        this.perPartitionLimit = perPartitionLimit;
         this.queriedColumns = gatherQueriedColumns();
     }
 
@@ -132,6 +136,9 @@ public class SelectStatement implements CQLStatement
 
         if (limit != null)
             limit.addFunctionsTo(functions);
+
+        if (perPartitionLimit != null)
+            perPartitionLimit.addFunctionsTo(functions);
     }
 
     // Note that the queried columns internally is different from the one selected by the
@@ -171,6 +178,7 @@ public class SelectStatement implements CQLStatement
                                    selection,
                                    StatementRestrictions.empty(StatementType.SELECT, cfm),
                                    false,
+                                   null,
                                    null,
                                    null);
     }
@@ -216,7 +224,8 @@ public class SelectStatement implements CQLStatement
 
         int nowInSec = FBUtilities.nowInSeconds();
         int userLimit = getLimit(options);
-        ReadQuery query = getQuery(options, nowInSec, userLimit);
+        int userPerPartitionLimit = getPerPartitionLimit(options);
+        ReadQuery query = getQuery(options, nowInSec, userLimit, userPerPartitionLimit);
 
         int pageSize = getPageSize(options);
 
@@ -242,12 +251,12 @@ public class SelectStatement implements CQLStatement
 
     public ReadQuery getQuery(QueryOptions options, int nowInSec) throws RequestValidationException
     {
-        return getQuery(options, nowInSec, getLimit(options));
+        return getQuery(options, nowInSec, getLimit(options), getPerPartitionLimit(options));
     }
 
-    public ReadQuery getQuery(QueryOptions options, int nowInSec, int userLimit) throws RequestValidationException
+    public ReadQuery getQuery(QueryOptions options, int nowInSec, int userLimit, int perPartitionLimit) throws RequestValidationException
     {
-        DataLimits limit = getDataLimits(userLimit);
+        DataLimits limit = getDataLimits(userLimit, perPartitionLimit);
         if (restrictions.isKeyRange() || restrictions.usesSecondaryIndexing())
             return getRangeCommand(options, limit, nowInSec);
 
@@ -409,7 +418,9 @@ public class SelectStatement implements CQLStatement
     public ResultMessage.Rows executeInternal(QueryState state, QueryOptions options, int nowInSec) throws RequestExecutionException, RequestValidationException
     {
         int userLimit = getLimit(options);
-        ReadQuery query = getQuery(options, nowInSec, userLimit);
+        int userPerPartitionLimit = getPerPartitionLimit(options);
+
+        ReadQuery query = getQuery(options, nowInSec, userLimit, userPerPartitionLimit);
         int pageSize = getPageSize(options);
 
         try (ReadOrderGroup orderGroup = query.startOrderGroup())
@@ -620,9 +631,10 @@ public class SelectStatement implements CQLStatement
         return builder.build();
     }
 
-    private DataLimits getDataLimits(int userLimit)
+    private DataLimits getDataLimits(int userLimit, int perPartitionLimit)
     {
         int cqlRowLimit = DataLimits.NO_LIMIT;
+        int cqlPerPartitionLimit = DataLimits.NO_LIMIT;
 
         // If we aggregate, the limit really apply to the number of rows returned to the user, not to what is queried, and
         // since in practice we currently only aggregate at top level (we have no GROUP BY support yet), we'll only ever
@@ -630,13 +642,16 @@ public class SelectStatement implements CQLStatement
         // Whenever we support GROUP BY, we'll have to add a new DataLimits kind that knows how things are grouped and is thus
         // able to apply the user limit properly.
         // If we do post ordering we need to get all the results sorted before we can trim them.
-        if (!selection.isAggregate() && !needsPostQueryOrdering())
-            cqlRowLimit = userLimit;
-
+        if (!selection.isAggregate())
+        {
+            if (!needsPostQueryOrdering())
+                cqlRowLimit = userLimit;
+            cqlPerPartitionLimit = perPartitionLimit;
+        }
         if (parameters.isDistinct)
             return cqlRowLimit == DataLimits.NO_LIMIT ? DataLimits.DISTINCT_NONE : DataLimits.distinctLimits(cqlRowLimit);
 
-        return cqlRowLimit == DataLimits.NO_LIMIT ? DataLimits.NONE : DataLimits.cqlLimits(cqlRowLimit);
+        return DataLimits.cqlLimits(cqlRowLimit, cqlPerPartitionLimit);
     }
 
     /**
@@ -647,6 +662,23 @@ public class SelectStatement implements CQLStatement
      * as been specified.
      */
     public int getLimit(QueryOptions options)
+    {
+        return getLimit(limit, options);
+    }
+
+    /**
+     * Returns the per partition limit specified by the user.
+     * May be used by custom QueryHandler implementations
+     *
+     * @return the per partition limit specified by the user or <code>DataLimits.NO_LIMIT</code> if no value
+     * as been specified.
+     */
+    public int getPerPartitionLimit(QueryOptions options)
+    {
+        return getLimit(perPartitionLimit, options);
+    }
+
+    private int getLimit(Term limit, QueryOptions options)
     {
         int userLimit = DataLimits.NO_LIMIT;
 
@@ -830,14 +862,20 @@ public class SelectStatement implements CQLStatement
         public final List<RawSelector> selectClause;
         public final WhereClause whereClause;
         public final Term.Raw limit;
+        public final Term.Raw perPartitionLimit;
 
-        public RawStatement(CFName cfName, Parameters parameters, List<RawSelector> selectClause, WhereClause whereClause, Term.Raw limit)
+        public RawStatement(CFName cfName, Parameters parameters,
+                            List<RawSelector> selectClause,
+                            WhereClause whereClause,
+                            Term.Raw limit,
+                            Term.Raw perPartitionLimit)
         {
             super(cfName);
             this.parameters = parameters;
             this.selectClause = selectClause;
             this.whereClause = whereClause;
             this.limit = limit;
+            this.perPartitionLimit = perPartitionLimit;
         }
 
         public ParsedStatement.Prepared prepare() throws InvalidRequestException
@@ -857,7 +895,13 @@ public class SelectStatement implements CQLStatement
             StatementRestrictions restrictions = prepareRestrictions(cfm, boundNames, selection, forView);
 
             if (parameters.isDistinct)
+            {
+                checkNull(perPartitionLimit, "PER PARTITION LIMIT is not allowed with SELECT DISTINCT queries");
                 validateDistinctSelection(cfm, selection, restrictions);
+            }
+
+            checkFalse(selection.isAggregate() && perPartitionLimit != null,
+                       "PER PARTITION LIMIT is not allowed with aggregate queries.");
 
             Comparator<List<ByteBuffer>> orderingComparator = null;
             boolean isReversed = false;
@@ -881,7 +925,8 @@ public class SelectStatement implements CQLStatement
                                                         restrictions,
                                                         isReversed,
                                                         orderingComparator,
-                                                        prepareLimit(boundNames));
+                                                        prepareLimit(boundNames, limit, keyspace(), limitReceiver()),
+                                                        prepareLimit(boundNames, perPartitionLimit, keyspace(), limitReceiver()));
 
             return new ParsedStatement.Prepared(stmt, boundNames, boundNames.getPartitionKeyBindIndexes(cfm));
         }
@@ -920,12 +965,13 @@ public class SelectStatement implements CQLStatement
         }
 
         /** Returns a Term for the limit or null if no limit is set */
-        private Term prepareLimit(VariableSpecifications boundNames) throws InvalidRequestException
+        private Term prepareLimit(VariableSpecifications boundNames, Term.Raw limit,
+                                  String keyspace, ColumnSpecification limitReceiver) throws InvalidRequestException
         {
             if (limit == null)
                 return null;
 
-            Term prepLimit = limit.prepare(keyspace(), limitReceiver());
+            Term prepLimit = limit.prepare(keyspace, limitReceiver);
             prepLimit.collectMarkerSpecification(boundNames);
             return prepLimit;
         }

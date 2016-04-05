@@ -293,6 +293,7 @@ selectStatement returns [SelectStatement.RawStatement expr]
     @init {
         boolean isDistinct = false;
         Term.Raw limit = null;
+        Term.Raw perPartitionLimit = null;
         Map<ColumnIdentifier.Raw, Boolean> orderings = new LinkedHashMap<ColumnIdentifier.Raw, Boolean>();
         boolean allowFiltering = false;
         boolean isJson = false;
@@ -303,6 +304,7 @@ selectStatement returns [SelectStatement.RawStatement expr]
       K_FROM cf=columnFamilyName
       ( K_WHERE wclause=whereClause )?
       ( K_ORDER K_BY orderByClause[orderings] ( ',' orderByClause[orderings] )* )?
+      ( K_PER K_PARTITION K_LIMIT rows=intValue { perPartitionLimit = rows; } )?
       ( K_LIMIT rows=intValue { limit = rows; } )?
       ( K_ALLOW K_FILTERING  { allowFiltering = true; } )?
       {
@@ -311,7 +313,7 @@ selectStatement returns [SelectStatement.RawStatement expr]
                                                                              allowFiltering,
                                                                              isJson);
           WhereClause where = wclause == null ? WhereClause.empty() : wclause.build();
-          $expr = new SelectStatement.RawStatement(cf, params, sclause, where, limit);
+          $expr = new SelectStatement.RawStatement(cf, params, sclause, where, limit, perPartitionLimit);
       }
     ;
 
@@ -1630,6 +1632,9 @@ basic_unreserved_keyword returns [String str]
         | K_JSON
         | K_CALLED
         | K_INPUT
+        | K_LIKE
+        | K_PER
+        | K_PARTITION
         ) { $str = $k.text; }
     ;
 
@@ -1649,6 +1654,9 @@ K_INSERT:      I N S E R T;
 K_UPDATE:      U P D A T E;
 K_WITH:        W I T H;
 K_LIMIT:       L I M I T;
+K_LIKE:        L I K E;
+K_PER:         P E R;
+K_PARTITION:   P A R T I T I O N;
 K_USING:       U S I N G;
 K_USE:         U S E;
 K_DISTINCT:    D I S T I N C T;
