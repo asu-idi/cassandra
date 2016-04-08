@@ -873,6 +873,11 @@ public class DatabaseDescriptor
         conf.batch_size_fail_threshold_in_kb = threshold;
     }
 
+    public static int getUnloggedBatchAcrossPartitionsWarnThreshold()
+    {
+        return conf.unlogged_batch_across_partitions_warn_threshold;
+    }
+
     public static Collection<String> getInitialTokens()
     {
         return tokensFromString(System.getProperty("cassandra.initial_token", conf.initial_token));
