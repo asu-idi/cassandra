@@ -34,6 +34,7 @@ import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.AbstractNetworkTopologySnitch;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
+import org.apache.cassandra.locator.PendingRangeMaps;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -492,14 +493,19 @@ public class MoveTest
         assert keyspaceFound;
     }
 
-    private void assertMaps(Map<Range<Token>,  Collection<InetAddress>> expected, Map<Range<Token>,  Collection<InetAddress>> actual)
+    private void assertMaps(Map<Range<Token>,  Collection<InetAddress>> expected, PendingRangeMaps actual)
     {
-        assertEquals(expected.size(), actual.size());
-        for(Map.Entry<Range<Token>,  Collection<InetAddress>> expectedEntry : expected.entrySet())
+        int sizeOfActual = 0;
+        Iterator<Map.Entry<Range<Token>, List<InetAddress>>> iterator = actual.iterator();
+        while(iterator.hasNext())
         {
-            assertNotNull(actual.get(expectedEntry.getKey()));
-            assertEquals(new ArrayList<>(expectedEntry.getValue()), new ArrayList<>(actual.get(expectedEntry.getKey())));
+            Map.Entry<Range<Token>, List<InetAddress>> actualEntry = iterator.next();
+            assertNotNull(expected.get(actualEntry.getKey()));
+            assertEquals(new HashSet<>(expected.get(actualEntry.getKey())), new HashSet<>(actualEntry.getValue()));
+            sizeOfActual++;
         }
+
+        assertEquals(expected.size(), sizeOfActual); 
     }
 
     /*
