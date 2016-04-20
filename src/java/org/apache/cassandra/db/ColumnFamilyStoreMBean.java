@@ -417,6 +417,11 @@ public interface ColumnFamilyStoreMBean
     public int[] getSSTableCountPerLevel();
 
     /**
+     * @return sstable fanout size for level compaction strategy.
+     */
+    public int getLevelFanoutSize();
+
+    /**
      * Get the ratio of droppable tombstones to real columns (and non-droppable tombstones)
      * @return ratio
      */

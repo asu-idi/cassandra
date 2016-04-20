@@ -112,7 +112,7 @@ public class OverflowTest extends CQLTester
                     + "AND dclocal_read_repair_chance = 0.5 "
                     + "AND gc_grace_seconds = 4 "
                     + "AND bloom_filter_fp_chance = 0.01 "
-                    + "AND compaction = { 'class' : 'LeveledCompactionStrategy', 'sstable_size_in_mb' : 10 } "
+                    + "AND compaction = { 'class' : 'LeveledCompactionStrategy', 'sstable_size_in_mb' : 10, 'fanout_size' : 5 } "
                     + "AND compression = { 'sstable_compression' : '' } "
                     + "AND caching = 'all' ");
 

@@ -2960,6 +2960,12 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return compactionStrategyWrapper.getSSTableCountPerLevel();
     }
 
+    @Override
+    public int getLevelFanoutSize()
+    {
+        return compactionStrategyWrapper.getLevelFanoutSize();
+    }
+
     public static class ViewFragment
     {
         public final List<SSTableReader> sstables;

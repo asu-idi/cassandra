@@ -151,30 +151,37 @@ public class StandaloneScrubber
     {
         WrappingCompactionStrategy wrappingStrategy = (WrappingCompactionStrategy)strategy;
         int maxSizeInMB = (int)((cfs.getCompactionStrategy().getMaxSSTableBytes()) / (1024L * 1024L));
-        if (wrappingStrategy.getWrappedStrategies().size() == 2 && wrappingStrategy.getWrappedStrategies().iterator().next() instanceof LeveledCompactionStrategy)
+        if (wrappingStrategy.getWrappedStrategies().size() == 2)
         {
-            System.out.println("Checking leveled manifest");
-            Predicate<SSTableReader> repairedPredicate = new Predicate<SSTableReader>()
+            AbstractCompactionStrategy abstractCompactionStrategy = wrappingStrategy.getWrappedStrategies().iterator().next();
+            if (abstractCompactionStrategy instanceof LeveledCompactionStrategy)
             {
-                @Override
-                public boolean apply(SSTableReader sstable)
+                LeveledCompactionStrategy leveledCompactionStrategy = (LeveledCompactionStrategy) abstractCompactionStrategy;
+                int levelFanoutSize = leveledCompactionStrategy.getLevelFanoutSize();
+
+                System.out.println("Checking leveled manifest");
+                Predicate<SSTableReader> repairedPredicate = new Predicate<SSTableReader>()
                 {
-                    return sstable.isRepaired();
+                    @Override
+                    public boolean apply(SSTableReader sstable)
+                    {
+                        return sstable.isRepaired();
+                    }
+                };
+
+                List<SSTableReader> repaired = Lists.newArrayList(Iterables.filter(sstables, repairedPredicate));
+                List<SSTableReader> unRepaired = Lists.newArrayList(Iterables.filter(sstables, Predicates.not(repairedPredicate)));
+
+                LeveledManifest repairedManifest = LeveledManifest.create(cfs, maxSizeInMB, levelFanoutSize, repaired);
+                for (int i = 1; i < repairedManifest.getLevelCount(); i++)
+                {
+                    repairedManifest.repairOverlappingSSTables(i);
                 }
-            };
-
-            List<SSTableReader> repaired = Lists.newArrayList(Iterables.filter(sstables, repairedPredicate));
-            List<SSTableReader> unRepaired = Lists.newArrayList(Iterables.filter(sstables, Predicates.not(repairedPredicate)));
-
-            LeveledManifest repairedManifest = LeveledManifest.create(cfs, maxSizeInMB, repaired);
-            for (int i = 1; i < repairedManifest.getLevelCount(); i++)
-            {
-                repairedManifest.repairOverlappingSSTables(i);
-            }
-            LeveledManifest unRepairedManifest = LeveledManifest.create(cfs, maxSizeInMB, unRepaired);
-            for (int i = 1; i < unRepairedManifest.getLevelCount(); i++)
-            {
-                unRepairedManifest.repairOverlappingSSTables(i);
+                LeveledManifest unRepairedManifest = LeveledManifest.create(cfs, maxSizeInMB, levelFanoutSize, unRepaired);
+                for (int i = 1; i < unRepairedManifest.getLevelCount(); i++)
+                {
+                    unRepairedManifest.repairOverlappingSSTables(i);
+                }
             }
         }
     }
