@@ -203,6 +203,15 @@ public final class WrappingCompactionStrategy extends AbstractCompactionStrategy
         return 0;
     }
 
+    public synchronized int getLevelFanoutSize()
+    {
+        if (this.repaired instanceof LeveledCompactionStrategy)
+        {
+            return ((LeveledCompactionStrategy)repaired).getLevelFanoutSize();
+        }
+        return 0;
+    }
+
     public synchronized int[] getSSTableCountPerLevel()
     {
         if (this.repaired instanceof LeveledCompactionStrategy && this.unrepaired instanceof LeveledCompactionStrategy)

@@ -144,7 +144,7 @@ public class TableStats extends NodeToolCmd
                         System.out.print(count);
                         long maxCount = 4L; // for L0
                         if (level > 0)
-                            maxCount = (long) Math.pow(10, level);
+                            maxCount = (long) Math.pow(table.getLevelFanoutSize(), level);
                         //  show max threshold for level when exceeded
                         if (count > maxCount)
                             System.out.print("/" + maxCount);

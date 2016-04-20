@@ -82,7 +82,7 @@ public class MajorLeveledCompactionWriter extends CompactionAwareWriter
         partitionsWritten++;
         if (sstableWriter.currentWriter().getOnDiskFilePointer() > maxSSTableSize)
         {
-            if (totalWrittenInLevel > LeveledManifest.maxBytesForLevel(currentLevel, maxSSTableSize))
+            if (totalWrittenInLevel > LeveledManifest.maxBytesForLevel(currentLevel, maxSSTableSize, 10))
             {
                 totalWrittenInLevel = 0;
                 currentLevel++;
