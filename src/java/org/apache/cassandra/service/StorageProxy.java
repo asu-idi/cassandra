@@ -650,7 +650,9 @@ public class StorageProxy implements StorageProxyMBean
         }
         finally
         {
-            writeMetrics.addNano(System.nanoTime() - startTime);
+            long latency = System.nanoTime() - startTime;
+            writeMetrics.addNano(latency);
+            updateCoordinatorWriteLatencyTableMetric(mutations, latency);
         }
     }
 
@@ -913,13 +915,39 @@ public class StorageProxy implements StorageProxyMBean
         }
         finally
         {
-            writeMetrics.addNano(System.nanoTime() - startTime);
+            long latency = System.nanoTime() - startTime;
+            writeMetrics.addNano(latency);
+            updateCoordinatorWriteLatencyTableMetric(mutations, latency);
         }
     }
 
     public static boolean canDoLocalRequest(InetAddress replica)
     {
         return replica.equals(FBUtilities.getBroadcastAddress());
+    }
+
+    private static void updateCoordinatorWriteLatencyTableMetric(Collection<? extends IMutation> mutations, long latency)
+    {
+        if (null == mutations)
+        {
+            return;
+        }
+
+        try
+        {
+            //TODO: Avoid giving same latency number for each CF in each mutation in a given set of mutations
+            //We could potentially pass a callback into performWrite. And add callback provision for mutateCounter or mutateAtomically (sendToHintedEndPoints)
+            //However, Trade off between write metric per CF accuracy vs performance hit due to callbacks. Similar issue exists with CoordinatorReadLatency metric.
+            mutations.forEach(mutation -> {
+                mutation.getColumnFamilyIds().forEach(tableId -> {
+                    Keyspace.open(mutation.getKeyspaceName()).getColumnFamilyStore(tableId).metric.coordinatorWriteLatency.update(latency, TimeUnit.NANOSECONDS);
+                });
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.warn("Exception occurred updating coordinatorWriteLatency metric", ex);
+        }
     }
 
     private static void syncWriteToBatchlog(Collection<Mutation> mutations, BatchlogEndpoints endpoints, UUID uuid)
