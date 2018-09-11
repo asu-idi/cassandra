@@ -20,6 +20,7 @@ package org.apache.cassandra.rocksdb.encoding;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -111,6 +112,30 @@ public class RowKeyEncoder
         ByteBuffer[] decoded = KeyPartsEncoder.decode(key, types);
         assert decoded.length > 1;
         return decoded[1];
+    }
+
+    public static ByteBuffer decodePartitionKey(byte[] key, CFMetaData metadata)
+    {
+        if (metadata.partitionKeyColumns().size() == 1)
+            return decodeNonCompositePartitionKey(key, metadata);
+
+        List<ColumnDefinition> partitionKeyColumns = metadata.partitionKeyColumns();
+        List<AbstractType> types = new ArrayList<>(partitionKeyColumns.size() + 1);
+        types.add(getTokenDataType(metadata.partitioner));
+        for (ColumnDefinition partitionKeyColumn : partitionKeyColumns)
+        {
+            types.add(partitionKeyColumn.type);
+        }
+
+        ByteBuffer[] decoded = KeyPartsEncoder.decode(key, types);
+        assert decoded.length > 1;
+        return CompositeType.build(Arrays.copyOfRange(decoded, 1, decoded.length));
+    }
+
+    public static DecoratedKey decoratedPartitionKey(byte[] key, CFMetaData metadata)
+    {
+        ByteBuffer partitionKey = RowKeyEncoder.decodePartitionKey(key, metadata);
+        return metadata.decorateKey(partitionKey);
     }
 
     private static void appendClusteringKeyParts(List<Pair<AbstractType, ByteBuffer>> keyParts, List<ColumnDefinition> clusteringColumns, ClusteringPrefix clustering)

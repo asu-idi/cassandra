@@ -52,11 +52,15 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
 import org.apache.cassandra.db.partitions.Partition;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
+import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
+import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.engine.StorageEngine;
@@ -185,6 +189,12 @@ public class RocksDBEngine implements StorageEngine
                                                    readCommand.partitionKey(),
                                                    readCommand.metadata());
         return readCommand.clusteringIndexFilter().getUnfilteredRowIterator(readCommand.columnFilter(), partition);
+    }
+
+    @Override
+    public UnfilteredPartitionIterator queryStorage(ColumnFamilyStore cfs, PartitionRangeReadCommand readCommand)
+    {
+        return new RocksDBPartitionIterator(cfs, readCommand.columnFilter(), readCommand.dataRange());
     }
 
     public Future<Void> forceFlush(ColumnFamilyStore cfs)

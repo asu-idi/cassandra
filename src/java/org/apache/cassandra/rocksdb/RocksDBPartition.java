@@ -151,17 +151,17 @@ public class RocksDBPartition implements Partition
         return sliceIterator(slices.get(0), columns, (reversed ? PartitionIterOrder.REVERSED : PartitionIterOrder.NORMAL));
     }
 
-
     private UnfilteredRowIterator sliceIterator(Slice slice, ColumnFilter columnFilter, PartitionIterOrder iterOrder)
     {
+        RocksDBIteratorAdapter rocksIterator = metadata.isIndex() ?
+                                               db.newIterator(RocksCFName.INDEX, partitionKey) : db.newIterator(partitionKey);
+
         byte[] partitionKeyBytes = RowKeyEncoder.encode(partitionKey, metadata);
-
-        RocksDBIteratorAdapter rocksIterator = metadata.isIndex() ? db.newIterator(RocksCFName.INDEX, partitionKey) : db.newIterator(partitionKey);
-
         iterOrder.seekToStart(rocksIterator, partitionKey, partitionKeyBytes, slice, metadata);
 
         return new AbstractUnfilteredRowIterator(metadata, partitionKey, DeletionTime.LIVE, metadata.partitionColumns(),
-                                                 null, iterOrder == PartitionIterOrder.REVERSED, EncodingStats.NO_STATS)
+                                                 null, iterOrder == PartitionIterOrder.REVERSED,
+                                                 EncodingStats.NO_STATS)
         {
             public void close()
             {

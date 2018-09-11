@@ -24,8 +24,10 @@ import java.util.UUID;
 import java.util.concurrent.Future;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
+import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
@@ -48,6 +50,9 @@ public interface StorageEngine
 
     UnfilteredRowIterator queryStorage(ColumnFamilyStore cfs,
                                        SinglePartitionReadCommand readCommand);
+
+    UnfilteredPartitionIterator queryStorage(ColumnFamilyStore cfs,
+                                             PartitionRangeReadCommand readCommand);
 
     Future<Void> forceFlush(final ColumnFamilyStore cfs);
 

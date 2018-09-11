@@ -232,7 +232,7 @@ public class PartitionRangeReadCommand extends ReadCommand
 
     public QueryPager getPager(PagingState pagingState, int protocolVersion)
     {
-            return new PartitionRangeQueryPager(this, pagingState, protocolVersion);
+        return new PartitionRangeQueryPager(this, pagingState, protocolVersion);
     }
 
     protected void recordLatency(TableMetrics metric, long latencyNanos)
@@ -243,6 +243,9 @@ public class PartitionRangeReadCommand extends ReadCommand
     @VisibleForTesting
     public UnfilteredPartitionIterator queryStorage(final ColumnFamilyStore cfs, ReadOrderGroup orderGroup)
     {
+        if (cfs.isRocksDBBacked())
+            return cfs.engine.queryStorage(cfs, this);
+
         ColumnFamilyStore.ViewFragment view = cfs.select(View.selectLive(dataRange().keyRange()));
         Tracing.trace("Executing seq scan across {} sstables for {}", view.sstables.size(), dataRange().keyRange().getString(metadata().getKeyValidator()));
 
