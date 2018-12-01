@@ -179,23 +179,8 @@ public class RowKeyEncoder
 
     // caluated encoded partition key length base on token and partition keys types
     // return a positive number if possible to caculate, otherwise null
-    public static Integer calculateEncodedPartitionKeyLength(CFMetaData metadata)
+    public static Integer getEncodedTokenLength(CFMetaData metadata)
     {
-        Integer length = KeyPartsEncoder.getEncodedLengthForType(getTokenDataType(metadata.partitioner));
-        if (length == null)
-        {
-            return null;
-        }
-        for (ColumnDefinition columnDefinition : metadata.partitionKeyColumns())
-        {
-            Integer pkLength = KeyPartsEncoder.getEncodedLengthForType(columnDefinition.type);
-            if (pkLength == null)
-            {
-                return null;
-            }
-            length = length + pkLength;
-        }
-
-        return length;
+        return KeyPartsEncoder.getEncodedLengthForType(getTokenDataType(metadata.partitioner));
     }
 }

@@ -40,20 +40,6 @@ public class PartitionDeletionTest extends RocksDBTestBase
     }
 
     @Test
-    public void partitionDeleteWithoutClusteringKeyAndFixLengthPartitionKey() throws Throwable
-    {
-        createTable("CREATE TABLE %s (p bigint, v text, PRIMARY KEY (p))");
-        execute("INSERT INTO %s(p, v) values (?, ?)", 1L, "v1");
-        execute("INSERT INTO %s(p, v) values (?, ?)", 2L, "v2");
-
-        execute("DELETE FROM %s WHERE p=?", 1L);
-        triggerCompaction();
-        assertRows(execute("SELECT p, v FROM %s WHERE p=?", 1L));
-        assertRows(execute("SELECT p, v FROM %s WHERE p=?", 2L),
-                   row(2L, "v2"));
-    }
-
-    @Test
     public void parititionDeleteWithClusteringKey() throws Throwable
     {
         createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");

@@ -19,7 +19,6 @@
 package org.apache.cassandra.rocksdb;
 
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,42 +37,28 @@ import org.apache.cassandra.db.rows.BufferCell;
 import org.apache.cassandra.db.rows.ColumnData;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.dht.RandomPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.rocksdb.encoding.value.RowValueEncoder;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.UUIDGen;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksIterator;
 
 import static junit.framework.Assert.assertEquals;
 
 public class PartitionOrderTest extends RocksDBTestBase
 {
 
-    public static final int SAMPLES = 100;
+    private static final int SAMPLES = 100;
 
     @Test
     public void murmur3Partitioner() throws Throwable
     {
-        assertPartitionsAreTokenOrdered(Murmur3Partitioner.instance);
-    }
-
-    @Test
-    public void randomPartitioner() throws Throwable
-    {
-        assertPartitionsAreTokenOrdered(RandomPartitioner.instance);
-    }
-
-    private void assertPartitionsAreTokenOrdered(IPartitioner partitioner) throws Throwable
-    {
-        try (Util.PartitionerSwitcher ignored = new Util.PartitionerSwitcher(partitioner))
+        try (Util.PartitionerSwitcher ignored = new Util.PartitionerSwitcher(Murmur3Partitioner.instance))
         {
             List<Pair<Token, BigInteger>> tokenToIds = new ArrayList<>(SAMPLES);
             for (int i = 0; i < SAMPLES; i++)
             {
                 BigInteger userId = BigInteger.valueOf(ThreadLocalRandom.current().nextLong());
-                Token token = partitioner.getToken(ByteBuffer.wrap(userId.toByteArray()));
+                Token token = ((IPartitioner) Murmur3Partitioner.instance).getToken(ByteBuffer.wrap(userId.toByteArray()));
                 tokenToIds.add(Pair.create(token, userId));
             }
 

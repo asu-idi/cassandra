@@ -90,11 +90,9 @@ public class RowKeyEncoderTest
     }
 
     @Test
-    public void testGetEncodedPartitionKeyLength()
+    public void testGetEncodedTokenLength()
     {
         ColumnFamilyStore cfs1 = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF_STANDARD_1);
-        ColumnFamilyStore cfs2 = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF_STANDARD_2);
-        assertEquals(Integer.valueOf(8 + 4), RowKeyEncoder.calculateEncodedPartitionKeyLength(cfs1.metadata));
-        assertNull(RowKeyEncoder.calculateEncodedPartitionKeyLength(cfs2.metadata));
+        assertEquals(Integer.valueOf(8), RowKeyEncoder.getEncodedTokenLength(cfs1.metadata));
     }
 }

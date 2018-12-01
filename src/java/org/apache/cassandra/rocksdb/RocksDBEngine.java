@@ -62,7 +62,6 @@ import org.apache.cassandra.exceptions.StorageEngineException;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.transactions.UpdateTransaction;
 import org.apache.cassandra.metrics.SecondaryIndexMetrics;
-import org.apache.cassandra.rocksdb.encoding.PartitionMetaEncoder;
 import org.apache.cassandra.rocksdb.encoding.RowKeyEncoder;
 import org.apache.cassandra.rocksdb.encoding.value.RowValueEncoder;
 import org.apache.cassandra.rocksdb.index.RocksandraClusteringColumnIndex;
@@ -163,12 +162,9 @@ public class RocksDBEngine implements StorageEngine
 
     public void applyPartitionLevelDeletionToRocksdb(ColumnFamilyStore cfs, DecoratedKey partitionKey, DeletionTime partitionLevelDeletion)
     {
-        byte[] rocksDBKey = RowKeyEncoder.encode(partitionKey, cfs.metadata);
-        byte[] rocksDBValue = PartitionMetaEncoder.encodePartitionLevelDeletion(partitionLevelDeletion);
-
         try
         {
-            getRocksDBCFOfParent(cfs).merge(RocksCFName.META, partitionKey, rocksDBKey, rocksDBValue);
+            getRocksDBCFOfParent(cfs).deletePartition(partitionKey, partitionLevelDeletion);
         }
         catch (RocksDBException e)
         {
@@ -446,13 +442,13 @@ public class RocksDBEngine implements StorageEngine
     public String dumpPartitionMetaData(ColumnFamilyStore cfs, String partitionKey) throws RocksDBException
     {
         DecoratedKey decoratedKey = parseStringPartitionKey(cfs, partitionKey);
-        byte[] rocksKey = RowKeyEncoder.encode(decoratedKey, cfs.metadata);
+        byte[] metaKey = RowKeyEncoder.encodeToken(decoratedKey.getToken());
         RocksDBCF rocksDBCF = getRocksDBCF(cfs.metadata.cfId);
-        byte[] meta = rocksDBCF.get(RocksCFName.META, decoratedKey, rocksKey);
+        byte[] meta = rocksDBCF.get(RocksCFName.META, decoratedKey, metaKey);
         if (meta == null) {
             return "";
         }
-        return "0x" + Hex.bytesToHex(rocksKey) + "\t0x" + Hex.bytesToHex(meta);
+        return "0x" + Hex.bytesToHex(metaKey) + "\t0x" + Hex.bytesToHex(meta);
     }
 
     public void forceMajorCompaction(ColumnFamilyStore cfs)
