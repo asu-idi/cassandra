@@ -16,7 +16,6 @@ public class RocksDBConfigs
             System.getProperty("cassandra.rocksdb.bottommost_compression", COMPRESSION_TYPE.getLibraryName())
         );
 
-
     // Paths for storing RocksDB files.
     public static String ROCKSDB_DIR = System.getProperty("cassandra.rocksdb.dir", "/data/rocksdb");
     public static File STREAMING_TMPFILE_PATH = new File(System.getProperty("cassandra.rocksdb.stream.dir", "/data/rocksdbstream/"));
@@ -87,6 +86,10 @@ public class RocksDBConfigs
 
     // enable index transactions, default is false
     public static boolean ENABLE_INDEX_TRANSACTIONS = Boolean.getBoolean("cassandra.rocksdb.enable_index_transactions");
+
+    // bits size for bloom filter in PartitionMetaData for filtering out none-existing keys, default is 5MB per rocksdb instance.
+    // (note: bloom filter setup will be skipped if there is no data in data cf or there are too much keys has been deleted)
+    public static final int PARTITION_META_KEY_BLOOM_TOTAL_BITS = Integer.getInteger("cassandra.rocksdb.partition_meta_key_bloom_total_bits", 5 * 1024 * 1024 * 8);
 
     /**
      * Streaming configs
