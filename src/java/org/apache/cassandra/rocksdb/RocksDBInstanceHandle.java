@@ -119,6 +119,7 @@ public class RocksDBInstanceHandle
         dbOptions.setRateLimiter(((RocksDBEngine) cfs.engine).rateLimiter);
         dbOptions.setSstFileManager(sstFileManager);
         dbOptions.setMaxTotalWalSize(RocksDBConfigs.MAX_TOTAL_WAL_SIZE_MBYTES * 1024 * 1024L);
+        dbOptions.setCompactionReadaheadSize(RocksDBConfigs.COMPACTION_READAHEAD_SIZE);
 
         List<ColumnFamilyDescriptor> cfDescs = new ArrayList<>(3);
         ArrayList<ColumnFamilyHandle> columnFamilyHandles = new ArrayList<>(3);

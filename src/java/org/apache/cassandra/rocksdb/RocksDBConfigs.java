@@ -100,11 +100,13 @@ public class RocksDBConfigs
     // The read buffer size while reading RocksDB and sending into output stream.
     public static final long STREAMING_READ_AHEAD_BUFFER_SIZE = Long.getLong("cassandra.rocksdb.stream.readahead_size", 10L * 1024 * 1024);
 
+    // compaction read ahead, need be set at least 2M for slower disk.
+    public static final long COMPACTION_READAHEAD_SIZE = Long.getLong("cassandra.rocksdb.compaction_readahead_size", 2L * 1024 * 1024);
+
     /**
      * Testing configs
      */
     // Once enabled, the writes are written to both Cassandra and RocksDB which is future used to caclulate
     // the consistency and correctness of RocksDB.
     public static boolean ROCKSDB_DOUBLE_WRITE = Boolean.getBoolean("cassandra.rocksdb.double_write");
-
 }
