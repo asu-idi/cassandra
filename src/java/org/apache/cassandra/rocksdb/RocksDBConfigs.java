@@ -84,6 +84,9 @@ public class RocksDBConfigs
     // number of threads used to open sharded rocksdb instances
     public static int OPEN_CONCURRENCY = Integer.getInteger("cassandra.rocksdb.open_concurrency", NUM_SHARD);
 
+    // how many parallel compaction jobs per table when running "nodetool compact", cannot be bigger than NUM_SHARD
+    public static final int MAJOR_COMPACT_CONCURRENCY = Integer.getInteger("cassandra.rocksdb.major_compact_concurrency", NUM_SHARD);
+
     // enable index transactions, default is false
     public static boolean ENABLE_INDEX_TRANSACTIONS = Boolean.getBoolean("cassandra.rocksdb.enable_index_transactions");
 

@@ -119,6 +119,12 @@ public class RocksDBCF implements RocksDBCFMBean
                                                                                              new LinkedBlockingQueue<Runnable>(),
                                                                                              new NamedThreadFactory("RocksDBOpen"),
                                                                                              "internal");
+    private static final ExecutorService MAJOR_COMPACT_EXECUTOR = new JMXEnabledThreadPoolExecutor(RocksDBConfigs.MAJOR_COMPACT_CONCURRENCY,
+                                                                                             StageManager.KEEPALIVE,
+                                                                                             TimeUnit.SECONDS,
+                                                                                             new LinkedBlockingQueue<Runnable>(),
+                                                                                             new NamedThreadFactory("RocksDBMajorCompaction"),
+                                                                                             "internal");
 
     public RocksDBCF(ColumnFamilyStore cfs) throws RocksDBException
     {
@@ -307,12 +313,26 @@ public class RocksDBCF implements RocksDBCFMBean
         }
     }
 
-    public void compactRange() throws RocksDBException
+    public void compactRange()
     {
+        List<Future<?>> futures = new ArrayList<>(rocksDBHandles.size());
         for (RocksDBInstanceHandle dbhandle : rocksDBHandles)
         {
-            dbhandle.compactRange();
+            Future<?> future = MAJOR_COMPACT_EXECUTOR.submit(() -> {
+                try
+                {
+                    dbhandle.compactRange();
+                }
+                catch (RocksDBException e)
+                {
+                    logger.error(e.toString(), e);
+                    throw new RuntimeException(e);
+                }
+            });
+            futures.add(future);
         }
+
+        FBUtilities.waitOnFutures(futures);
     }
 
     public void forceFlush() throws RocksDBException
