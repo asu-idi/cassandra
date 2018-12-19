@@ -99,8 +99,6 @@ public class RocksDBInstanceHandle
         SstFileManager sstFileManager = new SstFileManager(Env.getDefault());
 
         final long writeBufferSize = RocksDBConfigs.WRITE_BUFFER_SIZE_MBYTES * 1024 * 1024L;
-        final long softPendingCompactionBytesLimit = 64 * 1073741824L; //64G
-
         // sstFilemanager options
         sstFileManager.setDeleteRateBytesPerSecond(RocksDBConfigs.DELETE_RATE_BYTES_PER_SECOND);
 
@@ -143,8 +141,8 @@ public class RocksDBInstanceHandle
         indexCfOptions.setWriteBufferSize(RocksDBConfigs.INDEX_WRITE_BUFFER_SIZE_MBYTES * 1024 * 1024L);
         indexCfOptions.setMaxWriteBufferNumber(2);
         indexCfOptions.setMaxBytesForLevelBase(RocksDBConfigs.MAX_MBYTES_FOR_LEVEL_BASE * 1024 * 1024L);
-        indexCfOptions.setSoftPendingCompactionBytesLimit(softPendingCompactionBytesLimit);
-        indexCfOptions.setHardPendingCompactionBytesLimit(8 * softPendingCompactionBytesLimit);
+        indexCfOptions.setSoftPendingCompactionBytesLimit(RocksDBConfigs.SOFT_PENDING_COMPACTION_BYTES_LIMIT);
+        indexCfOptions.setHardPendingCompactionBytesLimit(RocksDBConfigs.HARD_PENDING_COMPACTION_BYTES_LIMIT);
         indexCfOptions.setCompactionPriority(CompactionPriority.MinOverlappingRatio);
         indexCfOptions.setLevel0SlowdownWritesTrigger(RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER);
         indexCfOptions.setLevel0StopWritesTrigger(RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER);
@@ -162,8 +160,8 @@ public class RocksDBInstanceHandle
         dataCfOptions.setWriteBufferSize(writeBufferSize);
         dataCfOptions.setMaxWriteBufferNumber(4);
         dataCfOptions.setMaxBytesForLevelBase(RocksDBConfigs.MAX_MBYTES_FOR_LEVEL_BASE * 1024 * 1024L);
-        dataCfOptions.setSoftPendingCompactionBytesLimit(softPendingCompactionBytesLimit);
-        dataCfOptions.setHardPendingCompactionBytesLimit(8 * softPendingCompactionBytesLimit);
+        dataCfOptions.setSoftPendingCompactionBytesLimit(RocksDBConfigs.SOFT_PENDING_COMPACTION_BYTES_LIMIT);
+        dataCfOptions.setHardPendingCompactionBytesLimit(RocksDBConfigs.HARD_PENDING_COMPACTION_BYTES_LIMIT);
         dataCfOptions.setCompactionPriority(CompactionPriority.MinOverlappingRatio);
         dataCfOptions.setLevel0SlowdownWritesTrigger(RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER);
         dataCfOptions.setLevel0StopWritesTrigger(RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER);

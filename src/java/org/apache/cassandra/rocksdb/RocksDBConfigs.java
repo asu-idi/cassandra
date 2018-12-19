@@ -15,6 +15,11 @@ public class RocksDBConfigs
         CompressionType.getCompressionType(
             System.getProperty("cassandra.rocksdb.bottommost_compression", COMPRESSION_TYPE.getLibraryName())
         );
+    // Stalling writes when pending compaction reach limit, default to disabled
+    public static final long SOFT_PENDING_COMPACTION_BYTES_LIMIT = Long.getLong("cassandra.rocksdb.soft_pending_compaction_bytes_limit", 0);
+
+    // Stopping writes when pending compaction reach limit, default to disabled
+    public static final long HARD_PENDING_COMPACTION_BYTES_LIMIT = Long.getLong("cassandra.rocksdb.hard_pending_compaction_bytes_limit", 0);
 
     // Paths for storing RocksDB files.
     public static String ROCKSDB_DIR = System.getProperty("cassandra.rocksdb.dir", "/data/rocksdb");
