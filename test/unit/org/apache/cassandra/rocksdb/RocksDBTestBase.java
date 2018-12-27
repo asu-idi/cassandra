@@ -54,6 +54,8 @@ public class RocksDBTestBase extends CQLTester
     {
         System.setProperty("cassandra.rocksdb.dir", "/tmp/rocksdbtest/" + UUID.randomUUID());
         System.setProperty("cassandra.rocksdb.stream.dir", "/tmp/rocksdbteststream/" + UUID.randomUUID());
+        System.setProperty("cassandra.rocksdb.allow_ingest_behind", "true");
+        System.setProperty("cassandra.rocksdb.partition_meta_key_bloom_total_bits", "80");
         
         RocksDBConfigs.ROCKSDB_KEYSPACE = CQLTester.KEYSPACE;
         RocksDBConfigs.NUM_SHARD = 1;

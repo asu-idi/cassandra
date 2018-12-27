@@ -52,6 +52,7 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileManager;
 import org.rocksdb.Statistics;
+import org.rocksdb.Status;
 import org.rocksdb.Transaction;
 import org.rocksdb.WriteOptions;
 
@@ -79,6 +80,8 @@ public class RocksDBInstanceHandle
 
     private final CassandraValueMergeOperator mergeOperator;
     private final CassandraPartitionMetaMergeOperator partitionMetaMergeOperator;
+    private final IngestExternalFileOptions ingestExternalFileOptions;
+    private final IngestExternalFileOptions ingestExternalFileOptionsWithIngestBehind;
 
     public RocksDBInstanceHandle(ColumnFamilyStore cfs,
                                  String rocksDBTableDir,
@@ -200,7 +203,9 @@ public class RocksDBInstanceHandle
         this.partitionMetaData = new CassandraPartitionMetaData(rocksDB, metaCfHandle, getTokenLength(cfs));
         setupMetaBloomFilter(rocksDBTableDir);
         this.compactionFilter.setPartitionMetaData(partitionMetaData);
-
+        this.ingestExternalFileOptions = new IngestExternalFileOptions();
+        this.ingestExternalFileOptionsWithIngestBehind = new IngestExternalFileOptions();
+        ingestExternalFileOptionsWithIngestBehind.setIngestBehind(true);
         logger.info("Open rocksdb instance for cf {}.{} with path:{}, gcGraceSeconds:{}, purgeTTL:{}",
                     cfs.keyspace.getName(), cfs.name, rocksDBTableDir,
                     gcGraceSeconds, purgeTtlOnExpiration);

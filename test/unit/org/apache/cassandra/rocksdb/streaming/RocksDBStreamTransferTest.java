@@ -127,6 +127,40 @@ public class RocksDBStreamTransferTest extends RocksDBStreamTestBase
     }
 
     @Test
+    public void testTransferWithDuplicatedKeysShouldHonorMergeLogic() throws Throwable
+    {
+        // Create table one and insert some data for streaming.
+        createTable("CREATE TABLE %s (p TEXT, v TEXT, PRIMARY KEY (p))");
+        ColumnFamilyStore outCfs1 = getCurrentColumnFamilyStore();
+        execute("INSERT INTO %s(p, v) values (?, ?) USING TIMESTAMP 100", "p", "old");
+
+        // Create table one and insert some data for streaming.
+        createTable("CREATE TABLE %s (p TEXT, v TEXT, PRIMARY KEY (p))");
+        ColumnFamilyStore outCfs2 = getCurrentColumnFamilyStore();
+        execute("INSERT INTO %s(p, v) values (?, ?) USING TIMESTAMP 200", "p", "new");
+
+
+        // Create table two and for receiving streamed data.
+        createTable("CREATE TABLE %s (p TEXT, v TEXT, PRIMARY KEY (p))");
+        ColumnFamilyStore inCfs1 = getCurrentColumnFamilyStore();
+        assertRows(execute("SELECT v FROM %s WHERE p=?", "p"));
+
+        streamRanges(outCfs1, inCfs1, fullRange(outCfs1));
+        streamRanges(outCfs2, inCfs1, fullRange(outCfs2));
+
+        assertRows(execute("SELECT v FROM %s WHERE p=?", "p"), row("new"));
+
+        createTable("CREATE TABLE %s (p TEXT, v TEXT, PRIMARY KEY (p))");
+        ColumnFamilyStore inCfs2 = getCurrentColumnFamilyStore();
+        assertRows(execute("SELECT v FROM %s WHERE p=?", "p"));
+
+        streamRanges(outCfs2, inCfs2, fullRange(outCfs2));
+        streamRanges(outCfs1, inCfs2, fullRange(outCfs1));
+
+        assertRows(execute("SELECT v FROM %s WHERE p=?", "p"), row("new"));
+    }
+
+    @Test
     public void testTransferPartialRange() throws Throwable
     {
         int numberOfKeys = 1000;
