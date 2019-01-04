@@ -78,14 +78,17 @@ public class RocksDBStreamUtils
         return cfs;
     }
 
-    public static void ingestRocksSstable(UUID cfId, int shardId, String sstFile, RocksCFName rocksCFName) throws RocksDBException
+    /**
+     * ingest sstable file to rocksdb default (data) column family
+     */
+    public static void ingestRocksSstable(UUID cfId, int shardId, String sstFile) throws RocksDBException
     {
         ColumnFamilyStore cfs = getColumnFamilyStore(cfId);
         RocksDBCF rocksDBCF = RocksDBEngine.getRocksDBCF(cfId);
         if (cfs == null || rocksDBCF == null)
             return;
 
-        rocksDBCF.ingestRocksSstable(shardId, sstFile, INGESTION_WAIT_MS, rocksCFName);
+        rocksDBCF.ingestRocksSstable(shardId, sstFile, INGESTION_WAIT_MS, RocksCFName.DEFAULT);
     }
 
     /**

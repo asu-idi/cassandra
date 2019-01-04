@@ -31,7 +31,6 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
-import org.apache.cassandra.rocksdb.RocksCFName;
 import org.apache.cassandra.rocksdb.RocksDBConfigs;
 import org.apache.cassandra.rocksdb.RocksDBEngine;
 import org.apache.cassandra.rocksdb.encoding.RowKeyEncoder;
@@ -42,12 +41,11 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileWriter;
 
-public class RocksDBSStableWriter implements AutoCloseable
+public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
 {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBSStableWriter.class);
     private final UUID cfId;
-    private RocksCFName rocksCFName;
     private final int shardId;
     private final EnvOptions envOptions;
     private final Options options;
@@ -58,10 +56,9 @@ public class RocksDBSStableWriter implements AutoCloseable
     private volatile int sstableIngested;
     private byte[] lastWrittenKeyAfterIngestion = null;
 
-    public RocksDBSStableWriter(UUID cfId, int shardId, RocksCFName rocksCFName)
+    public RocksDBSStableWriter(UUID cfId, int shardId)
     {
         this.cfId = cfId;
-        this.rocksCFName = rocksCFName;
         this.currentSstableSize = 0;
         this.incomingBytes = 0;
         this.sstableIngested = 0;
@@ -93,7 +90,7 @@ public class RocksDBSStableWriter implements AutoCloseable
             if (sstable != null && sstable.exists())
             {
                 sstableIngested += 1;
-                RocksDBStreamUtils.ingestRocksSstable(cfId, shardId, sstable.getAbsolutePath(), rocksCFName);
+                RocksDBStreamUtils.ingestRocksSstable(cfId, shardId, sstable.getAbsolutePath());
                 lastWrittenKeyAfterIngestion = null;
             }
         }

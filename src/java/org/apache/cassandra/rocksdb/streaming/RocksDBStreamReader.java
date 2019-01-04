@@ -117,9 +117,23 @@ public class RocksDBStreamReader
                     cfs.getTableName());
     }
 
-    private void writeForShard(DataInputPlus input, int shardId, RocksCFName rocksCFName)
+    private void writeForShard(DataInputPlus input, int shardId, RocksCFName rocksCFName) throws IOException
     {
-        RocksDBSStableWriter writer = new RocksDBSStableWriter(header.cfId, shardId, rocksCFName);
+        // write partition meta data with normal write path
+        if(rocksCFName == RocksCFName.META) {
+            try
+            {
+                writeWithWriter(input, new RocksDBPartitionMetaDataWriter(header.cfId, shardId));
+            }
+            catch (RocksDBException e)
+            {
+                throw Throwables.propagate(e);
+            }
+            return;
+        }
+
+        // write normal data with sstable ingest
+        RocksDBSStableWriter writer = new RocksDBSStableWriter(header.cfId, shardId);
         try
         {
             writeWithWriter(input, writer);
@@ -133,7 +147,7 @@ public class RocksDBStreamReader
         sstableIngested += writer.getSstableIngested();
     }
 
-    private void writeWithWriter(DataInputPlus input, RocksDBSStableWriter writer) throws IOException, RocksDBException
+    private void writeWithWriter(DataInputPlus input, RocksDBDataWriter writer) throws IOException, RocksDBException
     {
         while (input.readByte() != RocksDBStreamUtils.EOF[0])
         {

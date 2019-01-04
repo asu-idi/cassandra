@@ -33,7 +33,6 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SerializationHeader;
 import org.apache.cassandra.io.util.TrackedInputStream;
-import org.apache.cassandra.rocksdb.RocksCFName;
 import org.apache.cassandra.rocksdb.RocksDBConfigs;
 import org.apache.cassandra.rocksdb.RocksDBEngine;
 import org.apache.cassandra.streaming.ProgressInfo;
@@ -63,7 +62,7 @@ public class RocksDBCassandraStreamReader
     {
         for (int i = 0; i < RocksDBConfigs.NUM_SHARD; i++)
         {
-            writers[i] = new RocksDBSStableWriter(header.cfId, i, RocksCFName.DEFAULT);
+            writers[i] = new RocksDBSStableWriter(header.cfId, i);
         }
     }
 

@@ -576,5 +576,12 @@ public class RocksDBCF implements RocksDBCFMBean
         byte[] partitionKeyWithToken = RowKeyEncoder.encode(partitionKey, cfs.metadata);
         dbhandle.deleteParition(partitionKeyWithToken, partitionLevelDeletion.localDeletionTime(), partitionLevelDeletion.markedForDeleteAt());
     }
+
+    public void applyRawPartitionMetaData(int shardId, byte[] key, byte[] value) throws RocksDBException
+    {
+        RocksDBInstanceHandle dbhandle = rocksDBHandles.get(shardId);
+        dbhandle.applyRawPartitionMetaData(key, value);
+
+    }
 }
 

@@ -26,7 +26,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 
-import org.apache.cassandra.rocksdb.RocksCFName;
 import org.rocksdb.RocksDBException;
 
 import static org.junit.Assert.assertEquals;
@@ -61,7 +60,7 @@ public class RocksDBThroughputManagerTest extends RocksDBStreamTestBase
 
         public DummySstableWriter() throws IOException, RocksDBException
         {
-            super(null, 0, RocksCFName.DEFAULT);
+            super(null, 0);
         }
 
         public void increaseIncomingBytes(long value)

@@ -250,7 +250,6 @@ public class RocksDBInstanceHandle
 
     public void merge(RocksCFName rocksCFName, WriteOptions writeOptions, byte[] key, byte[] value) throws RocksDBException
     {
-
         ColumnFamilyHandle cfHandle = getCfHandle(rocksCFName);
         rocksDB.merge(cfHandle, writeOptions, key, value);
     }
@@ -395,5 +394,10 @@ public class RocksDBInstanceHandle
     public void deleteParition(byte[] partitionKeyWithToken, int localDeletionTime, long markedForDeleteAt) throws RocksDBException
     {
         this.partitionMetaData.deletePartition(partitionKeyWithToken, localDeletionTime, markedForDeleteAt);
+    }
+
+    public void applyRawPartitionMetaData(byte[] key, byte[] value) throws RocksDBException
+    {
+        this.partitionMetaData.applyRaw(key, value);
     }
 }
