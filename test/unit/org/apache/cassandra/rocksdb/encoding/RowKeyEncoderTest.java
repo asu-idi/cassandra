@@ -37,8 +37,8 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
+import static org.apache.cassandra.rocksdb.RocksDBUtils.getTokenLength;
 
 public class RowKeyEncoderTest
 {
@@ -93,6 +93,6 @@ public class RowKeyEncoderTest
     public void testGetEncodedTokenLength()
     {
         ColumnFamilyStore cfs1 = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF_STANDARD_1);
-        assertEquals(Integer.valueOf(8), RowKeyEncoder.getEncodedTokenLength(cfs1.metadata));
+        assertEquals(8, getTokenLength(cfs1));
     }
 }

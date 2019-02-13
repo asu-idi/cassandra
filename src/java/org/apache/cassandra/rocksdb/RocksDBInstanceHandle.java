@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.metrics.RocksDBTableMetrics;
-import org.apache.cassandra.rocksdb.encoding.RowKeyEncoder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CassandraCompactionFilter;
 import org.rocksdb.CassandraPartitionMetaData;
@@ -56,6 +55,7 @@ import org.rocksdb.Transaction;
 import org.rocksdb.WriteOptions;
 
 import static org.apache.cassandra.rocksdb.RocksDBConfigs.MERGE_OPERANDS_LIMIT;
+import static org.apache.cassandra.rocksdb.RocksDBUtils.getTokenLength;
 
 /*
  * Holds the rocksdb instance and cfs for single shard instance
@@ -157,6 +157,10 @@ public class RocksDBInstanceHandle
         dataCfOptions.setNumLevels(RocksDBConfigs.MAX_LEVELS);
         dataCfOptions.setCompressionType(RocksDBConfigs.COMPRESSION_TYPE);
         dataCfOptions.setBottommostCompressionType(RocksDBConfigs.BOTTOMMOST_COMPRESSION);
+        if (RocksDBConfigs.DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING)
+        {
+            dataCfOptions.useFixedLengthPrefixExtractor(getTokenLength(cfs));
+        }
         dataCfOptions.setWriteBufferSize(writeBufferSize);
         dataCfOptions.setMaxWriteBufferNumber(4);
         dataCfOptions.setMaxBytesForLevelBase(RocksDBConfigs.MAX_MBYTES_FOR_LEVEL_BASE * 1024 * 1024L);
@@ -218,16 +222,6 @@ public class RocksDBInstanceHandle
         partitionMetaData.enableBloomFilter(bloomTotalBits);
         logger.info("Enabled partition meta key bloom filter for {}, loading {} keys using {}ms, bloom_total_bits:{}",
                     rocksDBTableDir, metaNumOfKeys, System.currentTimeMillis() - startTime, bloomTotalBits);
-    }
-
-    private Integer getTokenLength(ColumnFamilyStore cfs)
-    {
-        Integer tokenLength = RowKeyEncoder.getEncodedTokenLength(cfs.metadata);
-        if (tokenLength == null)
-        {
-            throw new UnsupportedOperationException("Only fix token length partitioner is supported by Rocksandra");
-        }
-        return tokenLength;
     }
 
     private ColumnFamilyHandle getCfHandle(RocksCFName rocksCFName)

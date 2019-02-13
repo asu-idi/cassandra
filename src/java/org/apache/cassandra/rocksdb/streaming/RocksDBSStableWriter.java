@@ -43,6 +43,8 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileWriter;
 
+import static org.apache.cassandra.rocksdb.RocksDBUtils.getTokenLength;
+
 public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
 {
 
@@ -70,7 +72,12 @@ public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
         this.options.setBottommostCompressionType(RocksDBConfigs.BOTTOMMOST_COMPRESSION);
         final BlockBasedTableConfig tableOptions = new BlockBasedTableConfig();
         tableOptions.setFilter(new BloomFilter(10, false));
+        tableOptions.setWholeKeyFiltering(!RocksDBConfigs.DATA_DISABLE_WHOLE_KEY_FILTERING);
         this.options.setTableFormatConfig(tableOptions);
+        if (RocksDBConfigs.DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING)
+        {
+            this.options.useFixedLengthPrefixExtractor(getTokenLength(cfId));
+        }
         this.shardId = shardId;
         RocksDBThroughputManager.getInstance().registerIncomingStreamWriter(this);
     }

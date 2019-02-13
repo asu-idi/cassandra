@@ -144,6 +144,7 @@ public class RocksDBCF implements RocksDBCFMBean
 
         final BlockBasedTableConfig tableOptions = new BlockBasedTableConfig();
         tableOptions.setFilter(new BloomFilter(10, false));
+        tableOptions.setWholeKeyFiltering(!RocksDBConfigs.DATA_DISABLE_WHOLE_KEY_FILTERING);
         tableOptions.setBlockCache(engine.cache);
         tableOptions.setCacheIndexAndFilterBlocks(RocksDBConfigs.CACHE_INDEX_AND_FILTER_BLOCKS);
         tableOptions.setPinL0FilterAndIndexBlocksInCache(RocksDBConfigs.PIN_L0_FILTER_AND_INDEX_BLOCKS_IN_CACHE);

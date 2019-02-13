@@ -100,6 +100,17 @@ public class RocksDBConfigs
     public static final int PARTITION_META_KEY_BLOOM_TOTAL_BITS = Integer.getInteger("cassandra.rocksdb.partition_meta_key_bloom_total_bits", 5 * 1024 * 1024 * 8);
 
     /**
+     * Bloom filter configs
+     */
+    // disable bloom filter for the whole key, disabling that saves the BF size but increases IO. Default is false
+    // If this is disabled, you may want to set DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING to true to at least enable prefix bloom filter.
+    public static final boolean DATA_DISABLE_WHOLE_KEY_FILTERING = Boolean.getBoolean("cassandra.rocksdb.data_disable_whole_key_filtering");
+
+    // enable prefix bloom filter for the token part, so the single partition scan could leverage bloom filter too. Default is flase
+    // Once it's enabled, it sets useFixedLengthPrefixExtractor to 8 (the length of token key).
+    public static final boolean DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING = Boolean.getBoolean("cassandra.rocksdb.data_enable_partition_token_key_filtering");
+
+    /**
      * Streaming configs
      */
     // On the receiver side, we create a sstable and feed it to RocksDB every 512MB received.

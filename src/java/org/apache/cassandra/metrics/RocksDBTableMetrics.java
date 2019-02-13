@@ -165,6 +165,13 @@ public class RocksDBTableMetrics
                          MetricsFactory.createCounter(stats, TickerType.DB_MUTEX_WAIT_MICROS));
         Metrics.register(factory.createMetricName("MergeOperationTotalTime"),
                          MetricsFactory.createCounter(stats, TickerType.MERGE_OPERATION_TOTAL_TIME));
+        Metrics.register(factory.createMetricName("BloomFilterUseful"),
+                         MetricsFactory.createCounter(stats, TickerType.BLOOM_FILTER_USEFUL));
+        Metrics.register(factory.createMetricName("BloomFilterPrefixChecked"),
+                         MetricsFactory.createCounter(stats, TickerType.BLOOM_FILTER_PREFIX_CHECKED));
+        Metrics.register(factory.createMetricName("BloomFilterPrefixUseful"),
+                         MetricsFactory.createCounter(stats, TickerType.BLOOM_FILTER_PREFIX_USEFUL));
+
 
         rocksDBIngestTimeHistogram = Metrics.histogram(factory.createMetricName("IngestTime"), true);
         rocksDBIngestWaitTimeHistogram = Metrics.histogram(factory.createMetricName("IngestWaitTime"), true);
