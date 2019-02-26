@@ -36,6 +36,8 @@ import org.apache.cassandra.rocksdb.RocksDBEngine;
 import org.apache.cassandra.rocksdb.encoding.RowKeyEncoder;
 import org.apache.cassandra.rocksdb.encoding.value.RowValueEncoder;
 import org.apache.cassandra.utils.FBUtilities;
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.BloomFilter;
 import org.rocksdb.EnvOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
@@ -66,6 +68,9 @@ public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
         this.options = new Options();
         this.options.setCompressionType(RocksDBConfigs.COMPRESSION_TYPE);
         this.options.setBottommostCompressionType(RocksDBConfigs.BOTTOMMOST_COMPRESSION);
+        final BlockBasedTableConfig tableOptions = new BlockBasedTableConfig();
+        tableOptions.setFilter(new BloomFilter(10, false));
+        this.options.setTableFormatConfig(tableOptions);
         this.shardId = shardId;
         RocksDBThroughputManager.getInstance().registerIncomingStreamWriter(this);
     }
