@@ -31,6 +31,10 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.ParameterizedClass;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.FSReadError;
@@ -38,6 +42,7 @@ import org.apache.cassandra.io.compress.ICompressor;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.CompressionParams;
+import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.json.simple.JSONValue;
 
 import static org.apache.cassandra.utils.FBUtilities.updateChecksumInt;
@@ -65,6 +70,8 @@ final class HintsDescriptor
     // implemented for future compression support - see CASSANDRA-9428
     final ImmutableMap<String, Object> parameters;
     final ParameterizedClass compressionConfig;
+
+    private static final Logger logger = LoggerFactory.getLogger(HintsDescriptor.class);
 
     HintsDescriptor(UUID hostId, int version, long timestamp, ImmutableMap<String, Object> parameters)
     {
@@ -139,7 +146,27 @@ final class HintsDescriptor
         }
         catch (IOException e)
         {
+            if (handleHintsError(String.format("Failed to to open hints file: %s", path.toString()), e))
+            {
+                return null;
+            }
             throw new FSReadError(e, path.toFile());
+        }
+    }
+
+    private static boolean handleHintsError(String message, Throwable t)
+    {
+        JVMStabilityInspector.inspectThrowable(t);
+        switch (DatabaseDescriptor.getHintsFailurePolicy())
+        {
+            case die:
+                logger.error(message, t);
+                return false;
+            case ignore:
+                logger.error("[Ignored] " + message, t);
+                return true;
+            default:
+                throw new AssertionError(DatabaseDescriptor.getHintsFailurePolicy());
         }
     }
 

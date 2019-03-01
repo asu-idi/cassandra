@@ -196,6 +196,11 @@ disk_failure_policy: stop
 # ignore: ignore fatal errors and let the batches fail
 commit_failure_policy: stop
 
+# policy for corrupted hints file:
+# die: Thrown the exception and kill the JVM
+# ignore: ingore the bad hints file and continue
+hints_failure_policy: ignore
+
 # Maximum size of the key cache in memory.
 #
 # Each key cache hit saves 1 seek and each row cache hit saves 2 seeks at the

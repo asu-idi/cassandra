@@ -75,6 +75,7 @@ public class Config
 
     public DiskFailurePolicy disk_failure_policy = DiskFailurePolicy.ignore;
     public CommitFailurePolicy commit_failure_policy = CommitFailurePolicy.stop;
+    public HintsFailurePolicy hints_failure_policy = HintsFailurePolicy.ignore;
 
     /* initial token in the ring */
     public String initial_token;
@@ -391,6 +392,12 @@ public class Config
         stop,
         ignore,
         stop_paranoid,
+        die
+    }
+
+    public enum HintsFailurePolicy
+    {
+        ignore,
         die
     }
 

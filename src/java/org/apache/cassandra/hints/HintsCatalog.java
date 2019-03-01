@@ -37,6 +37,8 @@ import static java.util.stream.Collectors.groupingBy;
  */
 final class HintsCatalog
 {
+
+
     private final File hintsDirectory;
     private final Map<UUID, HintsStore> stores;
     private final ImmutableMap<String, Object> writerParams;
@@ -62,6 +64,7 @@ final class HintsCatalog
                 Files.list(hintsDirectory.toPath())
                      .filter(HintsDescriptor::isHintFileName)
                      .map(HintsDescriptor::readFromFile)
+                     .filter(h -> h != null)
                      .collect(groupingBy(h -> h.hostId));
             return new HintsCatalog(hintsDirectory, writerParams, stores);
         }

@@ -1569,6 +1569,16 @@ public class DatabaseDescriptor
         return conf.commit_failure_policy;
     }
 
+    public static void setHintsFailurePolicy(Config.HintsFailurePolicy policy)
+    {
+        conf.hints_failure_policy = policy;
+    }
+
+    public static Config.HintsFailurePolicy getHintsFailurePolicy()
+    {
+        return conf.hints_failure_policy;
+    }
+
     public static boolean isSnapshotBeforeCompaction()
     {
         return conf.snapshot_before_compaction;
