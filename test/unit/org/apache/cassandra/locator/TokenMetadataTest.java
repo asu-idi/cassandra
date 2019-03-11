@@ -345,4 +345,79 @@ public class TokenMetadataTest
         assertFalse(metadata.isMoving(ep));
         assertTrue(metadata.getRingVersion() > ver);
     }
+
+    public void testTopologyUpdate_shouldUpdate() throws UnknownHostException
+    {
+        final InetAddress first = InetAddress.getByName("127.0.0.1");
+        final InetAddress second = InetAddress.getByName("127.0.0.6");
+        final String DATA_CENTER = "datacenter1";
+        final String RACK1 = "rack1";
+        final String RACK2 = "rack2";
+
+        DatabaseDescriptor.setEndpointSnitch(new AbstractEndpointSnitch()
+        {
+            @Override
+            public String getRack(InetAddress endpoint)
+            {
+                return RACK1;
+            }
+
+            @Override
+            public String getDatacenter(InetAddress endpoint)
+            {
+                return DATA_CENTER;
+            }
+
+            @Override
+            public int compareEndpoints(InetAddress target, InetAddress a1, InetAddress a2)
+            {
+                return 0;
+            }
+        });
+
+        tmd.updateNormalToken(token(ONE), first);
+        tmd.updateNormalToken(token(SIX), second);
+
+        TokenMetadata tokenMetadata = tmd.cloneOnlyTokenMap();
+        assertNotNull(tokenMetadata);
+
+        TokenMetadata.Topology topology = tokenMetadata.getTopology();
+        assertNotNull(topology);
+
+        Map<String, Multimap<String, InetAddress>> racks = topology.getDatacenterRacks();
+        assertNotNull(racks);
+        assertTrue(racks.containsKey(DATA_CENTER));
+        assertTrue(racks.get(DATA_CENTER).size() == 2);
+        assertTrue(racks.get(DATA_CENTER).containsKey(RACK1));
+        assertFalse(racks.get(DATA_CENTER).containsKey(RACK2));
+        assertTrue(racks.get(DATA_CENTER).get(RACK1).contains(first));
+        assertTrue(racks.get(DATA_CENTER).get(RACK1).contains(second));
+
+        assertFalse(tokenMetadata.shouldUpdateTopology(first));
+        assertFalse(tokenMetadata.shouldUpdateTopology(second));
+
+        DatabaseDescriptor.setEndpointSnitch(new AbstractEndpointSnitch()
+        {
+            @Override
+            public String getRack(InetAddress endpoint)
+            {
+                return endpoint.equals(first) ? RACK1 : RACK2;
+            }
+
+            @Override
+            public String getDatacenter(InetAddress endpoint)
+            {
+                return DATA_CENTER;
+            }
+
+            @Override
+            public int compareEndpoints(InetAddress target, InetAddress a1, InetAddress a2)
+            {
+                return 0;
+            }
+        });
+
+        assertFalse(tokenMetadata.shouldUpdateTopology(first));
+        assertTrue(tokenMetadata.shouldUpdateTopology(second));
+    }
 }

@@ -1790,7 +1790,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public void updateTopology(InetAddress endpoint)
     {
-        if (getTokenMetadata().isMember(endpoint))
+        if (getTokenMetadata().shouldUpdateTopology(endpoint))
         {
             getTokenMetadata().updateTopology(endpoint);
         }

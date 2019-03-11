@@ -478,6 +478,21 @@ public class TokenMetadata
         }
     }
 
+    public boolean shouldUpdateTopology(InetAddress endpoint)
+    {
+        assert endpoint != null;
+
+        lock.readLock().lock();
+        try
+        {
+            return tokenToEndpointMap.inverse().containsKey(endpoint) && topology.shouldUpdateEndpoint(endpoint);
+        }
+        finally
+        {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * This is called when the snitch properties for this endpoint are updated, see CASSANDRA-10238.
      */
@@ -1357,33 +1372,44 @@ public class TokenMetadata
             dcEndpoints.remove(current.left, ep);
         }
 
-        void updateEndpoint(InetAddress ep)
+        boolean isValidSnitchAndEndpoint(IEndpointSnitch snitch, InetAddress ep)
+        {
+            return (snitch != null && currentLocations.containsKey(ep)
+                    && snitch.getDatacenter(ep) != null && snitch.getRack(ep) != null);
+        }
+
+        boolean shouldUpdateEndpoint(InetAddress ep)
         {
             IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
-            if (snitch == null || !currentLocations.containsKey(ep))
-                return;
+            return (isValidSnitchAndEndpoint(snitch, ep)
+                    && (!snitch.getDatacenter(ep).equals(currentLocations.get(ep).left)
+                        || !snitch.getRack(ep).equals(currentLocations.get(ep).right)));
+        }
 
-           updateEndpoint(ep, snitch);
+        void updateEndpoint(InetAddress ep)
+        {
+            updateEndpoint(ep, DatabaseDescriptor.getEndpointSnitch());
         }
 
         void updateEndpoints()
         {
             IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
-            if (snitch == null)
-                return;
-
             for (InetAddress ep : currentLocations.keySet())
                 updateEndpoint(ep, snitch);
         }
 
         private void updateEndpoint(InetAddress ep, IEndpointSnitch snitch)
         {
+            if (!isValidSnitchAndEndpoint(snitch, ep))
+                return;
+
             Pair<String, String> current = currentLocations.get(ep);
             String dc = snitch.getDatacenter(ep);
             String rack = snitch.getRack(ep);
             if (dc.equals(current.left) && rack.equals(current.right))
                 return;
 
+            logger.info("Updating endpoint {} in local topology with dc={}, rack={}", ep.getHostAddress(), dc, rack);
             doRemoveEndpoint(ep, current);
             doAddEndpoint(ep, dc, rack);
         }
