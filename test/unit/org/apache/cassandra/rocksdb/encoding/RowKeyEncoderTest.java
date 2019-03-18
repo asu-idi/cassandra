@@ -39,6 +39,7 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 
 import static org.junit.Assert.assertEquals;
 import static org.apache.cassandra.rocksdb.RocksDBUtils.getTokenLength;
+import static org.junit.Assert.assertTrue;
 
 public class RowKeyEncoderTest
 {
@@ -94,5 +95,20 @@ public class RowKeyEncoderTest
     {
         ColumnFamilyStore cfs1 = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF_STANDARD_1);
         assertEquals(8, getTokenLength(cfs1));
+    }
+
+    @Test
+    public void testDecodeClusteringKey()
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(CF_STANDARD_1);
+        ByteBuffer testKey = ByteBufferUtil.bytes(1234);
+        DecoratedKey dk = cfs.decorateKey(testKey);
+
+        Clustering clustering = Clustering.make(ByteBufferUtil.bytes(567));
+        byte[] encodedKey = RowKeyEncoder.encode(dk, clustering, cfs.metadata);
+
+        Clustering decodedClustering = RowKeyEncoder.decodeClustering(encodedKey, cfs.metadata);
+
+        assertEquals(clustering, decodedClustering);
     }
 }

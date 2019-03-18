@@ -111,6 +111,16 @@ implements WritableComparable<ImmutableBytesWritable> {
     }
 
     /**
+     * update the offset of Writable
+     * @param offset new offset
+     * @param length new available length
+     */
+    public void setOffset(final int offset, final int length) {
+        this.offset = offset;
+        this.length = length;
+    }
+
+    /**
      * @return the number of valid bytes in the buffer
      */
     public int getSize() {

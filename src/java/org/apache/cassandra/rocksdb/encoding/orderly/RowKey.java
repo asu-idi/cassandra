@@ -181,7 +181,11 @@ public abstract class RowKey
   public abstract Object deserialize(ImmutableBytesWritable w)
     throws IOException;
 
-  public Object deserialize(byte[] b) throws IOException { 
+  public Object deserialize(ImmutableBytesWritable w, int skipRowNum) throws IOException {
+    throw new UnsupportedOperationException("Unsupported operation");
+  }
+
+  public Object deserialize(byte[] b) throws IOException {
     return deserialize(b, 0);
   }
 
@@ -190,6 +194,22 @@ public abstract class RowKey
       w = new ImmutableBytesWritable();
     w.set(b, offset, b.length - offset);
     return deserialize(w);
+  }
+
+  /**
+   * Deserializes the keys from the byte array, starting from the offset.
+   * Skip the first skipRowNum rows.
+   * @param b the byte array for encoded data
+   * @param offset offset of the byte array
+   * @param skipRowNum number of rows to skip to deserialize
+   * @return
+   * @throws IOException
+   */
+  public Object deserialize(byte[] b, int offset, int skipRowNum) throws IOException {
+    if (w == null)
+      w = new ImmutableBytesWritable();
+    w.set(b, offset, b.length - offset);
+    return deserialize(w, skipRowNum);
   }
 
   /** Orders serialized byte b by XOR'ing it with the sort order mask. This

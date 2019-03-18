@@ -20,7 +20,6 @@ package org.apache.cassandra.rocksdb.encoding;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -42,12 +41,18 @@ import org.apache.cassandra.dht.RandomPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.utils.Pair;
 
+/**
+ * The format of the row key is:
+ * | token (long) | partition keys | clustering keys |
+ */
 public class RowKeyEncoder
 {
 
+    private final static int EXTRA_KEY_NUM = 1; // Currently the only extra key is the token at the beginning
+
     public static byte[] encode(DecoratedKey partitionKey, ClusteringPrefix clustering, CFMetaData metadata)
     {
-        int keyPartsSize = metadata.partitionKeyColumns().size() + clustering.size() + 1;
+        int keyPartsSize = metadata.partitionKeyColumns().size() + clustering.size() + EXTRA_KEY_NUM;
         List<Pair<AbstractType, ByteBuffer>> keyParts = new ArrayList<>(keyPartsSize);
         appendTokenKeyPart(keyParts, partitionKey);
         appendPartitionKeyParts(keyParts, metadata.partitionKeyColumns(), partitionKey);
@@ -58,7 +63,7 @@ public class RowKeyEncoder
 
     public static byte[] encode(DecoratedKey partitionKey, CFMetaData metadata)
     {
-        int keyPartsSize = metadata.partitionKeyColumns().size() + 1;
+        int keyPartsSize = metadata.partitionKeyColumns().size() + EXTRA_KEY_NUM;
         List<Pair<AbstractType, ByteBuffer>> keyParts = new ArrayList<>(keyPartsSize);
         appendTokenKeyPart(keyParts, partitionKey);
         appendPartitionKeyParts(keyParts, metadata.partitionKeyColumns(), partitionKey);
@@ -71,11 +76,16 @@ public class RowKeyEncoder
         return KeyPartsEncoder.encode(Collections.singletonList(createTokenKeyPart(token)));
     }
 
-    public static ByteBuffer[] decode(byte[] key, CFMetaData metadata)
+    public static Clustering decodeClustering(byte[] key, CFMetaData metadata)
     {
-        List<ColumnDefinition> partitionKeyColumns = metadata.partitionKeyColumns();
         List<ColumnDefinition> clusteringColumns = metadata.clusteringColumns();
-        List<AbstractType> types = new ArrayList<>(partitionKeyColumns.size() + clusteringColumns.size() + 1);
+        if (clusteringColumns.size() == 0)
+        {
+            return Clustering.EMPTY;
+        }
+
+        List<ColumnDefinition> partitionKeyColumns = metadata.partitionKeyColumns();
+        List<AbstractType> types = new ArrayList<>(partitionKeyColumns.size() + clusteringColumns.size() + EXTRA_KEY_NUM);
         types.add(getTokenDataType(metadata.partitioner));
         for (ColumnDefinition partitionKeyColumn : partitionKeyColumns)
         {
@@ -86,9 +96,8 @@ public class RowKeyEncoder
             types.add(clusteringColumn.type);
         }
 
-        ByteBuffer[] decoded = KeyPartsEncoder.decode(key, types);
-        assert decoded.length > 1;
-        return Arrays.copyOfRange(decoded, 1, decoded.length);
+        ByteBuffer[] decoded = KeyPartsEncoder.decode(key, types, partitionKeyColumns.size() + EXTRA_KEY_NUM);
+        return new BufferClustering(decoded);
     }
 
     public static ByteBuffer decodeNonCompositePartitionKey(byte[] key, CFMetaData metadata)
@@ -103,14 +112,6 @@ public class RowKeyEncoder
         assert decoded.length > 1;
         return decoded[1];
     }
-
-    public static Clustering decodeClustering(byte[] key, CFMetaData metadata)
-    {
-        ByteBuffer[] decoded = RowKeyEncoder.decode(key, metadata);
-        ByteBuffer[] clusteringKeys = Arrays.copyOfRange(decoded, metadata.partitionKeyColumns().size(), decoded.length);
-        return new BufferClustering(clusteringKeys);
-    }
-
 
     private static void appendClusteringKeyParts(List<Pair<AbstractType, ByteBuffer>> keyParts, List<ColumnDefinition> clusteringColumns, ClusteringPrefix clustering)
     {

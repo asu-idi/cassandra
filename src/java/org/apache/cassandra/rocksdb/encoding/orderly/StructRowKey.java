@@ -197,6 +197,18 @@ public class StructRowKey extends RowKey implements Iterable<Object>
     return v;
   }
 
+  @Override
+  public Object deserialize(ImmutableBytesWritable w, int skipRowNum) throws IOException {
+    int n = fields.length - skipRowNum;
+    if (v == null)
+      v = new Object[n];
+    for (int i = 0; i < skipRowNum; i++)
+      fields[i].skip(w);
+    for (int i = 0; i < n; i++)
+      v[i] = fields[i + skipRowNum].deserialize(w);
+    return v;
+  }
+
   /** Sets the serialized row key to iterate over. Subsequent calls to 
    * {@link #iterator} will iterate over this row key.
    * @param iw serialized row key bytes to use for iteration

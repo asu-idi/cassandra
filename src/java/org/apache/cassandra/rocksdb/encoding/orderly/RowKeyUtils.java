@@ -61,6 +61,6 @@ public class RowKeyUtils
    * @param offset number of bytes to seek (relative to current position)
    */
   public static void seek(ImmutableBytesWritable w, int offset) {
-    w.set(w.get(), w.getOffset() + offset, w.getLength() - offset);
+    w.setOffset(w.getOffset() + offset, w.getLength() - offset);
   }
 }

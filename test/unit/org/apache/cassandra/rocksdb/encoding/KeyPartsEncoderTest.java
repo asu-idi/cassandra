@@ -316,6 +316,21 @@ public class KeyPartsEncoderTest
         ByteBuffer[] decoded = KeyPartsEncoder.decode(encoded, types);
         List<ByteBuffer> expected = Arrays.stream(keyParts).map(kp -> kp.right).collect(Collectors.toList());
         assertEquals(expected, Arrays.asList(decoded));
+
+        for (int i = 0; i < keyParts.length; i++)
+        {
+            assertRoundTripPartial(i, keyParts);
+        }
+    }
+
+    private void assertRoundTripPartial(int skipRowNum, Pair<AbstractType, ByteBuffer>... keyParts)
+    {
+        int n = keyParts.length;
+        byte[] encoded = encode(keyParts);
+        List<AbstractType> types = Arrays.stream(keyParts).map(kp -> kp.left).collect(Collectors.toList());
+        ByteBuffer[] decoded = KeyPartsEncoder.decode(encoded, types, skipRowNum);
+        List<ByteBuffer> expected = Arrays.stream(keyParts).map(kp -> kp.right).collect(Collectors.toList()).subList(skipRowNum, n);
+        assertEquals(expected, Arrays.asList(decoded));
     }
 
     private byte[] encode(Pair<AbstractType, ByteBuffer>... keyParts)

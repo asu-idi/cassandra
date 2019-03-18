@@ -131,6 +131,13 @@ public class KeyPartsEncoder
 
     static ByteBuffer[] decode(byte[] key, List<AbstractType> types)
     {
+        return decode(key, types, 0);
+    }
+
+    static ByteBuffer[] decode(byte[] key, List<AbstractType> types, int skipRowNum)
+    {
+        assert skipRowNum <= types.size();
+
         RowKey[] fields = new RowKey[types.size()];
 
         for (int i = 0; i < types.size(); i++)
@@ -138,23 +145,23 @@ public class KeyPartsEncoder
             fields[i] = getOrderlyRowKey(types.get(i));
         }
 
-        RowKey structRowKey = new StructRowKey(fields);
+        StructRowKey structRowKey = new StructRowKey(fields);
         Object[] deserialized;
         try
         {
-            deserialized = (Object[]) structRowKey.deserialize(key);
+            deserialized = (Object[]) structRowKey.deserialize(key, 0, skipRowNum);
         }
         catch (IOException e)
         {
             throw new RuntimeException(e);
         }
 
-        assert deserialized.length == types.size();
+        assert deserialized.length == types.size() - skipRowNum;
         ByteBuffer[] result = new ByteBuffer[deserialized.length];
 
         for (int i = 0; i < result.length; i++)
         {
-            result[i] = decomposeOrderlyValue(deserialized[i], types.get(i));
+            result[i] = decomposeOrderlyValue(deserialized[i], types.get(i + skipRowNum));
         }
         return result;
     }
@@ -168,8 +175,6 @@ public class KeyPartsEncoder
 
         return rowKeyEncodingPolicies.get(type).getEncodedLength();
     }
-
-
 
     private static ByteBuffer decomposeOrderlyValue(Object orderlyValue, AbstractType type)
     {
