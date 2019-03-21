@@ -73,6 +73,7 @@ public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
         final BlockBasedTableConfig tableOptions = new BlockBasedTableConfig();
         tableOptions.setFilter(new BloomFilter(10, false));
         tableOptions.setWholeKeyFiltering(!RocksDBConfigs.DATA_DISABLE_WHOLE_KEY_FILTERING);
+        tableOptions.setBlockSize(RocksDBConfigs.DATA_BLOCK_SIZE);
         this.options.setTableFormatConfig(tableOptions);
         if (RocksDBConfigs.DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING)
         {

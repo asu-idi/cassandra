@@ -99,6 +99,13 @@ public class RocksDBConfigs
     // (note: bloom filter setup will be skipped if there is no data in data cf or there are too much keys has been deleted)
     public static final int PARTITION_META_KEY_BLOOM_TOTAL_BITS = Integer.getInteger("cassandra.rocksdb.partition_meta_key_bloom_total_bits", 5 * 1024 * 1024 * 8);
 
+    // data table block size -- RocksDB packs user data in blocks. When reading a key-value pair from a table file, an
+    // entire block is loaded into memory. Block size is 4KB by default. Each table file contains an index that lists
+    // offsets of all blocks. Increasing block_size means that the index contains fewer entries (since there are fewer
+    // blocks per file) and is thus smaller. Increasing block_size decreases memory usage and space amplification
+    // (better compression rate), but increases read amplification.
+    public static final long DATA_BLOCK_SIZE = Long.getLong("cassandra.rocksdb.data_block_size", 4 * 1024);
+
     /**
      * Bloom filter configs
      */

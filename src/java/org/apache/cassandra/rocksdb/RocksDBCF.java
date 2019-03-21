@@ -149,6 +149,7 @@ public class RocksDBCF implements RocksDBCFMBean
         tableOptions.setCacheIndexAndFilterBlocks(RocksDBConfigs.CACHE_INDEX_AND_FILTER_BLOCKS);
         tableOptions.setPinL0FilterAndIndexBlocksInCache(RocksDBConfigs.PIN_L0_FILTER_AND_INDEX_BLOCKS_IN_CACHE);
         tableOptions.setIndexType(getTableIndexType(RocksDBConfigs.TABLE_INDEX_TYPE));
+        tableOptions.setBlockSize(RocksDBConfigs.DATA_BLOCK_SIZE);
 
         final BlockBasedTableConfig metaTableOption = new BlockBasedTableConfig();
         metaTableOption.setFilter(new BloomFilter(10, false));
