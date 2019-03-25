@@ -36,34 +36,31 @@ final class FacebookDiffCreatedListener extends PhutilEventListener {
 
     $test_step = array(
       'name' => 'Test Cassandra',
-      'shell' => 'scripts/test --all --runners=2 --timeout=900000',
-      'required' => false,
-      'parser' => 'scripts/test_report',
+      'shell' => 'scripts/determinator.py',
+      'determinator' => true,
     );
 
     $cmd_args = array(
       'name' => 'Instagram Cassandra',
       'oncall' => 'instagram',
       'steps' => array(
-        $build_step,
         $test_step,
-      ),
-      'report' => array(
-        array(
-          'type' => 'phcomment',
-          'report_trigger' => array('fail', 'warning'),
-        ),
       ),
     );
 
     $job = array(
       'command' => 'SandcastleUniversalCommand',
-      'command-args' => $cmd_args,
-      'vcs' => 'ig-cassandra-git',
+      'args' => $cmd_args,
+      'capabilities' => array(
+        'tenant' => 'ig-cassandra',
+        'vcs' => 'ig-cassandra-git',
+        'type' => 'lego',
+      ),
       'diff' => $diffID,
-      'type' => 'lego',
-      'alias' => 'ig-cassandra-build',
-      );
+      'alias' => 'ig-cassandra-test-main',
+      'source' => 'arc',
+      'priority' => 3
+    );
 
     $sandcastle = new ArcanistSandcastleClient($event->getValue('workflow'));
     $sandcastle->createBundle();

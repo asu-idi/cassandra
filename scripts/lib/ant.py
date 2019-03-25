@@ -58,3 +58,20 @@ def run_test(test_name):
 
 def run_all_test(runners, timeout):
     run_ant_target('test', ['-Dtest.runners=%s' % runners, "-Dtest.timeout=%s" % timeout])
+
+
+def run_test_range(runners, timeout, start_idx, end_idx=None):
+    p = subprocess.Popen("find ./ -name '*Test.java' | cut -c 3-",
+            shell=True, cwd=os.path.join(PROJECT_ROOT, './test/unit/'),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, err = p.communicate()
+    if p.returncode != 0:
+        raise subprocess.CalledProcessError(err)
+    all_test = filter(lambda test: len(test) > 0, map(lambda test: test.strip(), output.split('\n')))
+    tests = all_test[start_idx : end_idx]
+    with open('testlist.txt', 'w') as testlist:
+        for test in tests:
+            logging.info(test)
+            testlist.write("%s\n" % test)
+
+    run_ant_target('testclasslist', ['-Dtest.runners=%s' % runners, "-Dtest.timeout=%s" % timeout])

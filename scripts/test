@@ -30,6 +30,8 @@ parser.add_option('-b', '--build', action='store_true', default=False, help='Run
 parser.add_option('-l', '--list', action='store_true', default=False, help='List available test')
 parser.add_option('-a', '--all', action='store_true', default=False, help='Run all test')
 parser.add_option('-j', '--json', action='store_true', default=False, help='Print output as Json')
+parser.add_option('-s', '--start', action='store', type="int", default=0, help='start index')
+parser.add_option('-e', '--end', action='store', type="int", default=None, help='end index, if None: all the rest')
 parser.add_option('--runners', action='store', default=multiprocessing.cpu_count()/2+1, help='Concurrent runners when running all tests')
 parser.add_option('--timeout', action='store', default='300000', help='Timeout for single test when running all tests')
 
@@ -61,10 +63,11 @@ test_summary = os.path.join(util.PROJECT_ROOT, 'build/test/TESTS-TestSuites.xml'
 if os.path.isfile(test_summary):
     os.remove(test_summary)
 
-logging.info("Running all tests with %s runner and timeout %s ms..." % (options.runners, options.timeout))
+logging.info("Running tests from index {} to {} with {} runner and timeout {} ms...".format(
+    options.start, options.end, options.runners, options.timeout))
 
 try:
-    ant.run_all_test(options.runners, options.timeout)
+    ant.run_test_range(options.runners, options.timeout, options.start, options.end)
 except subprocess.CalledProcessError:
     logging.error("ant test failed, run scripts/test_report to get list of failures")
     sys.exit(1)
