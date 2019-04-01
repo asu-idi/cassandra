@@ -34,6 +34,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Uninterruptibles;
 
+import com.codahale.metrics.RatioGauge;
+import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +86,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
     private volatile ScheduledFuture<?> scheduledGossipTask;
     private static final ReentrantLock taskLock = new ReentrantLock();
+    private static final ReentrantLock unreachableQuarantineLock = new ReentrantLock();
     public final static int intervalInMillis = 1000;
     public final static int QUARANTINE_DELAY = StorageService.RING_DELAY * 2;
     private static final Logger logger = LoggerFactory.getLogger(Gossiper.class);
@@ -134,6 +137,8 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
     private final Map<InetAddress, EndpointState> endpointShadowStateMap = new ConcurrentHashMap<>();
 
     private volatile long lastProcessedMessageAt = System.currentTimeMillis();
+
+    private volatile UnreachableQuarantineState.State unreachableQuarantineState = UnreachableQuarantineState.initialState();
 
     private class GossipTask implements Runnable
     {
@@ -197,6 +202,31 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             finally
             {
                 taskLock.unlock();
+            }
+        }
+    }
+
+    private class UnreachableQuarantineTask implements Runnable
+    {
+        public void run()
+        {
+            // bail if messaging service is not listening or daemon is not active
+            if (!MessagingService.instance().isListening() || !StorageService.instance.isSetupCompleted())
+                return;
+
+            try
+            {
+                unreachableQuarantineLock.lock();
+                unreachableQuarantineState = unreachableQuarantineState.doNext(getUnreachableRatio(), DatabaseDescriptor.getUnreachableEndpointsRatioThreshold());
+            }
+            catch (Exception e)
+            {
+                JVMStabilityInspector.inspectThrowable(e);
+                logger.error("Quarantine error", e);
+            }
+            finally
+            {
+                unreachableQuarantineLock.unlock();
             }
         }
     }
@@ -305,6 +335,11 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         }
 
         return tokenOwners;
+    }
+
+    public double getUnreachableRatio()
+    {
+        return RatioGauge.Ratio.of(unreachableEndpoints.size(), unreachableEndpoints.size() + liveEndpoints.size()).getValue();
     }
 
     public long getEndpointDowntime(InetAddress ep)
@@ -744,6 +779,16 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             add(VersionedValue.STATUS_NORMAL); // node is legit in the cluster or it was stopped with kill -9
             add(VersionedValue.SHUTDOWN); }}; // node was shutdown
         return !unsafeStatuses.contains(status);
+    }
+
+    public double getUnreachableQuarantineThreshold()
+    {
+        return DatabaseDescriptor.getUnreachableEndpointsRatioThreshold();
+    }
+
+    public void setUnreachableQuarantineThreshold(double threshold)
+    {
+        DatabaseDescriptor.setUnreachableEndpointsRatioThreshold(threshold);
     }
 
     private void doStatusCheck()
@@ -1342,6 +1387,11 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
                                                               Gossiper.intervalInMillis,
                                                               Gossiper.intervalInMillis,
                                                               TimeUnit.MILLISECONDS);
+        if (isGossipOnlyMember(FBUtilities.getBroadcastAddress()))
+            ScheduledExecutors.scheduledTasks.scheduleWithFixedDelay(new UnreachableQuarantineTask(),
+                                                                     Gossiper.intervalInMillis,
+                                                                     Gossiper.intervalInMillis,
+                                                                     TimeUnit.MILLISECONDS);
     }
 
     /**

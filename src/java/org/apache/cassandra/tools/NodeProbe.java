@@ -1519,6 +1519,16 @@ public class NodeProbe implements AutoCloseable
             throw new RuntimeException(e);
         }
     }
+
+    public double getUnreachableQuarantineThreshold()
+    {
+        return gossProxy.getUnreachableQuarantineThreshold();
+    }
+
+    public void setUnreachableQuarantineThreshold(double value)
+    {
+        gossProxy.setUnreachableQuarantineThreshold(value);
+    }
 }
 
 class ColumnFamilyStoreMBeanIterator implements Iterator<Map.Entry<String, ColumnFamilyStoreMBean>>

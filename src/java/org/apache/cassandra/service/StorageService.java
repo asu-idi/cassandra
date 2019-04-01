@@ -355,7 +355,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new IllegalStateException("No configured daemon");
         }
-        daemon.thriftServer.start();
+        daemon.getThriftServer().start();
     }
 
     public void stopRPCServer()
@@ -364,17 +364,17 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             throw new IllegalStateException("No configured daemon");
         }
-        if (daemon.thriftServer != null)
-            daemon.thriftServer.stop();
+        if (daemon.getThriftServer() != null)
+            daemon.getThriftServer().stop();
     }
 
     public boolean isRPCServerRunning()
     {
-        if ((daemon == null) || (daemon.thriftServer == null))
+        if ((daemon == null) || (daemon.getThriftServer() == null))
         {
             return false;
         }
-        return daemon.thriftServer.isRunning();
+        return daemon.getThriftServer().isRunning();
     }
 
     public synchronized void startNativeTransport()

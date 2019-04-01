@@ -29,4 +29,8 @@ public interface GossiperMBean
 
     public void assassinateEndpoint(String address) throws UnknownHostException;
 
+    public double getUnreachableQuarantineThreshold();
+
+    public void setUnreachableQuarantineThreshold(double value);
+
 }

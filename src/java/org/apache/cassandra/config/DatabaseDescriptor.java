@@ -2093,4 +2093,11 @@ public class DatabaseDescriptor
         sourceDCs.addAll(Arrays.asList(dataCenters.split("\\s+")));
         return sourceDCs;
     }
+
+    public static double getUnreachableEndpointsRatioThreshold() { return conf.unreachable_endpoints_ratio_threshold; }
+
+    public static void setUnreachableEndpointsRatioThreshold(double threshold)
+    {
+        conf.unreachable_endpoints_ratio_threshold = threshold;
+    }
 }

@@ -136,7 +136,7 @@ public class CassandraDaemon
 
     private static final CassandraDaemon instance = new CassandraDaemon();
 
-    public Server thriftServer;
+    private Server thriftServer;
     private NativeTransportService nativeTransportService;
 
     private final boolean runManaged;
@@ -151,6 +151,11 @@ public class CassandraDaemon
         this.runManaged = runManaged;
         this.startupChecks = new StartupChecks().withDefaultTests();
         this.setupCompleted = false;
+    }
+
+    public Server getThriftServer()
+    {
+        return thriftServer;
     }
 
     private Server initCustomThriftServer(InetAddress rpcAddr, int rpcPort, int listenBacklog)
@@ -532,8 +537,8 @@ public class CassandraDaemon
         // On linux, this doesn't entirely shut down Cassandra, just the RPC server.
         // jsvc takes care of taking the rest down
         logger.info("Cassandra shutting down...");
-        if (thriftServer != null)
-            thriftServer.stop();
+        if (getThriftServer() != null)
+            getThriftServer().stop();
         if (nativeTransportService != null)
             nativeTransportService.destroy();
         StorageService.instance.setRpcReady(false);

@@ -15,21 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.tools.nodetool;
 
+import io.airlift.command.Arguments;
 import io.airlift.command.Command;
-
 import org.apache.cassandra.tools.NodeProbe;
-import org.apache.cassandra.tools.NodeTool.NodeToolCmd;
+import org.apache.cassandra.tools.NodeTool;
 
-@Command(name = "disablethrift", description = "Disable thrift server")
-public class DisableThrift extends NodeToolCmd
+import static com.google.common.base.Preconditions.checkArgument;
+
+@Command(name = "setunreachablequarantinethreshold", description = "Enable unreachable quarantine feature by setting the unreachable ratio threshold, or 0 to disable the feature")
+public class SetUnreachableQuarantineThreshold extends NodeTool.NodeToolCmd
 {
+    @Arguments(title = "unreachable_quarantine_threshold", usage = "<value>", description = "Ratio of unreachable to total endpoints, from 0 to 1 (ex: 0.85). 0 to disable", required = true)
+    private Double unreachableQuarantineThreshold = null;
+
     @Override
     public void execute(NodeProbe probe)
     {
-        probe.stopThriftServer();
-        // disable unreachable quarantine
-        probe.setUnreachableQuarantineThreshold(0);
+        checkArgument(unreachableQuarantineThreshold >= 0 && unreachableQuarantineThreshold <= 1, "Unreachable ratio must be between 0 and 1");
+        probe.setUnreachableQuarantineThreshold(unreachableQuarantineThreshold);
     }
 }

@@ -15,21 +15,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.tools.nodetool;
 
 import io.airlift.command.Command;
-
 import org.apache.cassandra.tools.NodeProbe;
-import org.apache.cassandra.tools.NodeTool.NodeToolCmd;
+import org.apache.cassandra.tools.NodeTool;
 
-@Command(name = "disablethrift", description = "Disable thrift server")
-public class DisableThrift extends NodeToolCmd
+@Command(name = "getunreachablequarantinethreshold", description = "Print the current unreachable endpoints ratio threshold")
+public class GetUnreachableQuarantineThreshold extends NodeTool.NodeToolCmd
 {
     @Override
     public void execute(NodeProbe probe)
     {
-        probe.stopThriftServer();
-        // disable unreachable quarantine
-        probe.setUnreachableQuarantineThreshold(0);
+        System.out.println("Current unreachable quarantine threshold: " + probe.getUnreachableQuarantineThreshold());
     }
 }

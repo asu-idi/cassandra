@@ -143,7 +143,9 @@ public class NodeTool
                 DisableHintsForDC.class,
                 EnableHintsForDC.class,
                 FailureDetectorInfo.class,
-                RefreshSizeEstimates.class
+                RefreshSizeEstimates.class,
+                GetUnreachableQuarantineThreshold.class,
+                SetUnreachableQuarantineThreshold.class
         );
 
         Cli.CliBuilder<Runnable> builder = Cli.builder("nodetool");
