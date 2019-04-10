@@ -1,5 +1,9 @@
 %define __jar_repack %{nil}
 
+# rpmbuild should not barf when it spots we ship
+# binary executable files in our 'noarch' package
+%define _binaries_in_noarch_packages_terminate_build   0
+
 %global username cassandra
 
 %define relname %{name}-%{version}
@@ -67,7 +71,7 @@ cp -rp conf/* %{buildroot}/usr/share/%{username}/default.conf
 cp -p redhat/%{username} %{buildroot}%{_sysconfdir}/rc.d/init.d/
 cp -p redhat/%{username}.conf %{buildroot}%{_sysconfdir}/security/limits.d/
 cp -p redhat/default %{buildroot}%{_sysconfdir}/default/%{username}
-cp -p lib/*.jar %{buildroot}/usr/share/%{username}/lib
+cp -rp lib/* %{buildroot}/usr/share/%{username}/lib
 cp -p tools/lib/*.jar %{buildroot}/usr/share/%{username}/lib
 cp -p pylib/*.py %{buildroot}/usr/share/%{username}/pylib
 cp -p pylib/cqlshlib/*.py %{buildroot}/usr/share/%{username}/pylib/cqlshlib
