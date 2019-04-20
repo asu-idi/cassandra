@@ -2104,13 +2104,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 tokensToUpdateInMetadata.add(token);
                 tokensToUpdateInSystemKeyspace.add(token);
 
-                // currentOwner is no longer current, endpoint is.  Keep track of these moves, because when
-                // a host no longer has any tokens, we'll want to remove it.
-                Multimap<InetAddress, Token> epToTokenCopy = getTokenMetadata().getEndpointToTokenMapForReading();
-                epToTokenCopy.get(currentOwner).remove(token);
-                if (epToTokenCopy.get(currentOwner).isEmpty())
-                    endpointsToRemove.add(currentOwner);
-
                 logger.info("Nodes {} and {} have the same token {}. {} is the new owner", endpoint, currentOwner, token, endpoint);
             }
             else
@@ -2119,7 +2112,13 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             }
         }
 
+        Set<InetAddress> oldEndpoints = tokenMetadata.getTokenEndpointsForReading();
         tokenMetadata.updateNormalTokens(tokensToUpdateInMetadata, endpoint);
+        Set<InetAddress> newEndpoints = tokenMetadata.getTokenEndpointsForReading();
+
+        // Make sure the endpoint has no token will be deleted (if it's not in endpointsToRemove yet)
+        oldEndpoints.stream().filter(ep -> !newEndpoints.contains(ep)).forEach(endpointsToRemove::add);
+
         for (InetAddress ep : endpointsToRemove)
         {
             removeEndpoint(ep);
