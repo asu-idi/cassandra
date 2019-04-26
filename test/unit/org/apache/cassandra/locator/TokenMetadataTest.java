@@ -20,8 +20,11 @@ package org.apache.cassandra.locator;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Multimap;
 
@@ -286,5 +289,60 @@ public class TokenMetadataTest
         assertTrue(racks.get(DATA_CENTER).containsKey(RACK2));
         assertTrue(racks.get(DATA_CENTER).get(RACK1).contains(first));
         assertTrue(racks.get(DATA_CENTER).get(RACK2).contains(second));
+    }
+
+    @Test
+    public void testUpdateTheSameToken() throws Exception
+    {
+        TokenMetadata metadata = StorageService.instance.getTokenMetadata();
+        metadata.clearUnsafe();
+
+        Collection<Token> tokens = new HashSet<>();
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        InetAddress ep = InetAddress.getByName("127.0.0.1");
+
+        Multimap<InetAddress, Token> endpointTokens = HashMultimap.create();
+        for (Token token : tokens)
+            endpointTokens.put(ep, token);
+
+        // The first update should change the ring version
+        long ver = metadata.getRingVersion();
+        metadata.updateNormalTokens(endpointTokens);
+        assertTrue(metadata.getRingVersion() > ver);
+
+        // The second update with the same token should not change the ring version
+        ver = metadata.getRingVersion();
+        metadata.updateNormalTokens(endpointTokens);
+        assertEquals(ver, metadata.getRingVersion());
+    }
+
+    @Test
+    public void testUpdateRemovingEndpoint() throws Exception
+    {
+        TokenMetadata metadata = StorageService.instance.getTokenMetadata();
+        metadata.clearUnsafe();
+
+        Collection<Token> tokens = new HashSet<>();
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        InetAddress ep = InetAddress.getByName("127.0.0.1");
+
+        Multimap<InetAddress, Token> endpointTokens = HashMultimap.create();
+        for (Token token : tokens)
+            endpointTokens.put(ep, token);
+        metadata.updateNormalTokens(endpointTokens);
+
+        for (Token token : tokens)
+            metadata.addMovingEndpoint(token, ep);
+        assertTrue(metadata.isMoving(ep));
+
+        // If there's a moving token, removing it should update the ring version
+        long ver = metadata.getRingVersion();
+        metadata.updateNormalTokens(endpointTokens);
+        assertFalse(metadata.isMoving(ep));
+        assertTrue(metadata.getRingVersion() > ver);
     }
 }
