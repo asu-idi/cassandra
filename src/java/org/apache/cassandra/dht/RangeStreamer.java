@@ -316,6 +316,14 @@ public class RangeStreamer
     }
 
     /**
+     * @return true when the we balance load in streaming
+     */
+    private static boolean useTokenBalanceStreaming()
+    {
+        return Boolean.parseBoolean(System.getProperty("cassandra.enable_token_balance_streaming", "false"));
+    }
+
+    /**
      * @param rangesWithSources The ranges we want to fetch (key) and their potential sources (value)
      * @param sourceFilters A (possibly empty) collection of source filters to apply. In addition to any filters given
      *                      here, we always exclude ourselves.
@@ -331,8 +339,12 @@ public class RangeStreamer
         {
             boolean foundSource = false;
 
+            List<InetAddress> candidates = new ArrayList<>(rangesWithSources.get(range));
+            if (useTokenBalanceStreaming())
+                sortByLeastLoadFirst(rangeFetchMapMap, candidates);
+
             outer:
-            for (InetAddress address : rangesWithSources.get(range))
+            for (InetAddress address : candidates)
             {
                 for (ISourceFilter filter : sourceFilters)
                 {
@@ -370,6 +382,24 @@ public class RangeStreamer
         }
 
         return rangeFetchMapMap;
+    }
+
+    private static void sortByLeastLoadFirst(Multimap<InetAddress, Range<Token>> rangeFetchMapMap, List<InetAddress> candidates)
+    {
+        candidates.sort(new Comparator<InetAddress>()
+        {
+            public int compare(InetAddress endpoint1, InetAddress endpoint2)
+            {
+                return getCurrentLoad(endpoint1).compareTo(getCurrentLoad(endpoint2));
+            }
+
+            private Double getCurrentLoad(InetAddress endpoint)
+            {
+                return rangeFetchMapMap.get(endpoint).stream()
+                                       .map(range -> range.left.size(range.right))
+                                       .reduce(Double::sum).orElse((double) 0);
+            }
+        });
     }
 
     public static Multimap<InetAddress, Range<Token>> getWorkMap(Multimap<Range<Token>, InetAddress> rangesWithSourceTarget, String keyspace,
