@@ -99,6 +99,7 @@ public class NodeTool
                 Refresh.class,
                 RemoveNode.class,
                 RocksDBProperty.class,
+                RocksMem.class,
                 DumpPartition.class,
                 Assassinate.class,
                 Repair.class,

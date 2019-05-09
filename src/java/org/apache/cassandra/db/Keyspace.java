@@ -56,6 +56,8 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.concurrent.OpOrder;
+import org.rocksdb.MemoryUsageType;
+import org.rocksdb.MemoryUtil;
 
 /**
  * It represents a Keyspace.
@@ -71,6 +73,18 @@ public class Keyspace
     public final KeyspaceMetrics metric;
 
     public final StorageEngine engine;
+
+    public boolean isRocksDBBacked()
+    {
+        return getName().equals(RocksDBConfigs.ROCKSDB_KEYSPACE);
+    }
+
+    public Map<String, Long> rocksDBMemUsage()
+    {
+        assert isRocksDBBacked();
+        assert engine instanceof RocksDBEngine;
+        return ((RocksDBEngine)engine).memoryUsage();
+    }
 
     // It is possible to call Keyspace.open without a running daemon, so it makes sense to ensure
     // proper directories here as well as in CassandraDaemon.

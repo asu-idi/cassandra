@@ -1486,10 +1486,16 @@ public class NodeProbe implements AutoCloseable
         return getRocksDBCFProxy(keyspace, table).getRocksDBProperty(property, cf);
     }
 
-    public boolean isRocksDBBacked(String keyspace, String table)
+    public boolean isRocksDBBacked(String keyspace)
     {
-        ColumnFamilyStoreMBean cfsProxy = getCfsProxy(keyspace, table);
-        return cfsProxy.isRocksDBBacked();
+        try
+        {
+            return ssProxy.isRocksDBBacked(keyspace);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     public String dumpPartition(String keyspace, String table, String partitionKey, int limit)
@@ -1500,6 +1506,18 @@ public class NodeProbe implements AutoCloseable
     public String dumpPartitionMetaData(String keyspace, String table, String partitionKey)
     {
         return getRocksDBCFProxy(keyspace, table).dumpPartitionMetaData(partitionKey);
+    }
+
+    public Map<String, Long> rocksDBMemUsage(String keyspace)
+    {
+        try
+        {
+            return ssProxy.rocksDBMemUsage(keyspace);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 }
 

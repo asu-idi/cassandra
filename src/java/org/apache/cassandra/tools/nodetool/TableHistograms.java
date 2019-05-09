@@ -106,7 +106,7 @@ public class TableHistograms extends NodeToolCmd
         double[] writeLatency = probe.metricPercentilesAsArray((CassandraMetricsRegistry.JmxTimerMBean) probe.getColumnFamilyMetric(keyspace, table, "WriteLatency"));
         double[] sstablesPerRead = null;
 
-        if (probe.isRocksDBBacked(keyspace, table))
+        if (probe.isRocksDBBacked(keyspace))
             sstablesPerRead = probe.rocksDBMetricPercentilesAsArray((CassandraMetricsRegistry.JmxHistogramMBean) probe.getRocksDBMetric(keyspace, table, "ReadNumMergeOperands"));
         else
             sstablesPerRead = probe.metricPercentilesAsArray((CassandraMetricsRegistry.JmxHistogramMBean) probe.getColumnFamilyMetric(keyspace, table, "SSTablesPerReadHistogram"));

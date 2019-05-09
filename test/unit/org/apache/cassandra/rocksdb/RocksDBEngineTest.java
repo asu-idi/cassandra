@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.rocksdb;
 
+import java.util.Map;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -47,6 +49,16 @@ public class RocksDBEngineTest extends RocksDBTestBase
 
         String dump = engine.dumpPartition(cfs, "'p1'", Integer.MAX_VALUE);
         assertEquals(2, dump.split("\n").length);
+    }
+
+    @Test
+    public void testGetRocksMemoryUsage() throws Throwable
+    {
+        createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");
+        execute("INSERT INTO %s(p, c, v) values (?, ?, ?)", "p1", "k1", "v1");
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        RocksDBEngine engine = (RocksDBEngine) cfs.engine;
+        assertTrue(engine.memoryUsage().get("kMemTableTotal") > 0);
     }
 
     @Test

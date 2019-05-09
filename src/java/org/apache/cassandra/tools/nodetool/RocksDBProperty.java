@@ -126,7 +126,7 @@ public class RocksDBProperty extends NodeToolCmd
             String keyspaceName = entry.getKey();
             String tableName = entry.getValue().getTableName();
 
-            if (!probe.isRocksDBBacked(keyspaceName, tableName))
+            if (!probe.isRocksDBBacked(keyspaceName))
                 continue;
 
             if (keyspace != null && !keyspaceName.equals(keyspace))

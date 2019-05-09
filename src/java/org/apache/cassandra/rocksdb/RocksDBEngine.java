@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,8 +33,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFutureTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +79,8 @@ import org.apache.cassandra.utils.Hex;
 import org.apache.cassandra.utils.Pair;
 import org.rocksdb.Cache;
 import org.rocksdb.LRUCache;
+import org.rocksdb.MemoryUsageType;
+import org.rocksdb.MemoryUtil;
 import org.rocksdb.RateLimiter;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -462,5 +468,23 @@ public class RocksDBEngine implements StorageEngine
 
     public void clearSnapshot(ColumnFamilyStore cfs, String snapshotName) throws IOException {
         getRocksDBCF(cfs).clearSnapshot(snapshotName);
+    }
+
+    public Map<String, Long> memoryUsage()
+    {
+        Map<MemoryUsageType, Long> usage = MemoryUtil.getApproximateMemoryUsageByType(getDBInstances(), Sets.newHashSet(cache, metaCache));
+        TreeMap<String, Long> ret = new TreeMap<>();
+        for (Map.Entry<MemoryUsageType, Long> entry : usage.entrySet())
+        {
+            ret.put(entry.getKey().name(), entry.getValue());
+        }
+        return ret;
+    }
+
+    private List<RocksDB> getDBInstances()
+    {
+        return rocksDBFamily.values().stream()
+                            .flatMap((rocksDBCF) -> rocksDBCF.getRocksDBs().stream())
+                            .collect(Collectors.toList());
     }
 }

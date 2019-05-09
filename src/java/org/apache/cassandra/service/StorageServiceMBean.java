@@ -598,4 +598,8 @@ public interface StorageServiceMBean extends NotificationEmitter
      * @return true if the node successfully starts resuming. (this does not mean bootstrap streaming was success.)
      */
     public boolean resumeBootstrap();
+
+    boolean isRocksDBBacked(String keyspace) throws IOException;
+
+    Map<String, Long> rocksDBMemUsage(String keyspace) throws IOException;
 }

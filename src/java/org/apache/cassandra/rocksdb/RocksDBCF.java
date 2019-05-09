@@ -19,7 +19,6 @@
 package org.apache.cassandra.rocksdb;
 
 import java.io.BufferedInputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -36,6 +35,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
@@ -69,16 +69,9 @@ import org.apache.cassandra.utils.Hex;
 import org.apache.cassandra.utils.Pair;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
-import org.rocksdb.CassandraCompactionFilter;
-import org.rocksdb.CassandraValueMergeOperator;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyOptions;
-import org.rocksdb.CompactionPriority;
-import org.rocksdb.DBOptions;
-import org.rocksdb.Env;
-import org.rocksdb.FlushOptions;
 import org.rocksdb.IndexType;
 import org.rocksdb.ReadOptions;
+import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
@@ -604,6 +597,11 @@ public class RocksDBCF implements RocksDBCFMBean
         RocksDBInstanceHandle dbhandle = rocksDBHandles.get(shardId);
         dbhandle.applyRawPartitionMetaData(key, value);
 
+    }
+
+    List<RocksDB> getRocksDBs()
+    {
+        return this.rocksDBHandles.stream().map(RocksDBInstanceHandle::getDB).collect(Collectors.toList());
     }
 }
 

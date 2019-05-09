@@ -1255,9 +1255,8 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     }
 
-    @Override
     public boolean isRocksDBBacked() {
-        return keyspace.getName().equals(RocksDBConfigs.ROCKSDB_KEYSPACE);
+        return keyspace.isRocksDBBacked();
     }
 
     /**

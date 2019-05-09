@@ -174,6 +174,4 @@ public interface ColumnFamilyStoreMBean
        Enable/Disable compaction space check
      */
     public void compactionDiskSpaceCheck(boolean enable);
-
-    public boolean isRocksDBBacked();
 }

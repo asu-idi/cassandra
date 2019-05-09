@@ -393,4 +393,9 @@ public class RocksDBInstanceHandle
     {
         this.partitionMetaData.applyRaw(key, value);
     }
+
+    public RocksDB getDB()
+    {
+        return rocksDB;
+    }
 }
