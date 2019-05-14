@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -118,6 +119,8 @@ public class RocksDBInstanceHandle
         dbOptions.setSstFileManager(sstFileManager);
         dbOptions.setMaxTotalWalSize(RocksDBConfigs.MAX_TOTAL_WAL_SIZE_MBYTES * 1024 * 1024L);
         dbOptions.setCompactionReadaheadSize(RocksDBConfigs.COMPACTION_READAHEAD_SIZE);
+        dbOptions.setAllowIngestBehind(RocksDBConfigs.ALLOW_INGEST_BEHIND);
+        dbOptions.setDumpMallocStats(RocksDBConfigs.DUMP_MALLOC_STATS);
 
         List<ColumnFamilyDescriptor> cfDescs = new ArrayList<>(3);
         ArrayList<ColumnFamilyHandle> columnFamilyHandles = new ArrayList<>(3);
@@ -374,8 +377,26 @@ public class RocksDBInstanceHandle
     public void ingestRocksSstable(RocksCFName rocksCFName, String sstFile) throws RocksDBException
     {
         ColumnFamilyHandle cfhandle = getCfHandle(rocksCFName);
-        try(final IngestExternalFileOptions ingestExternalFileOptions = new IngestExternalFileOptions()) {
-            rocksDB.ingestExternalFile(cfhandle, Arrays.asList(sstFile), ingestExternalFileOptions);
+        List<String> files = Collections.singletonList(sstFile);
+
+        if (!RocksDBConfigs.ALLOW_INGEST_BEHIND)
+        {
+            rocksDB.ingestExternalFile(cfhandle, files, ingestExternalFileOptions);
+            return;
+        }
+
+        try
+        {
+            rocksDB.ingestExternalFile(cfhandle, files, ingestExternalFileOptionsWithIngestBehind);
+        } catch (RocksDBException e) {
+            if(e.getStatus().getCode() == Status.Code.InvalidArgument)
+            {
+                logger.info("Failed to ingest {} with ingest_behind option, status: '{}', retry to normal ingest",
+                            sstFile, e.getStatus().getState());
+                rocksDB.ingestExternalFile(cfhandle, files, ingestExternalFileOptions);
+                return;
+            }
+            throw e;
         }
     }
 
