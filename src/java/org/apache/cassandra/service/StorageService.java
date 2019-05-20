@@ -2450,8 +2450,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     // needs to be modified to accept either a keyspace or ARS.
     private Multimap<Range<Token>, InetAddress> getChangedRangesForLeaving(String keyspaceName, InetAddress endpoint)
     {
+        AbstractReplicationStrategy rs = Keyspace.open(keyspaceName).getReplicationStrategy();
         // First get all ranges the leaving endpoint is responsible for
-        Collection<Range<Token>> ranges = getRangesForEndpoint(keyspaceName, endpoint);
+        Collection<Range<Token>> ranges = rs.getAddressRanges(endpoint);
 
         if (logger.isDebugEnabled())
             logger.debug("Node {} ranges [{}]", endpoint, StringUtils.join(ranges, ", "));
@@ -2461,7 +2462,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // Find (for each range) all nodes that store replicas for these ranges as well
         TokenMetadata metadata = tokenMetadata.cloneOnlyTokenMap(); // don't do this in the loop! #7758
         for (Range<Token> range : ranges)
-            currentReplicaEndpoints.put(range, Keyspace.open(keyspaceName).getReplicationStrategy().calculateNaturalEndpoints(range.right, metadata));
+            currentReplicaEndpoints.put(range, rs.calculateNaturalEndpoints(range.right, metadata));
 
         TokenMetadata temp = tokenMetadata.cloneAfterAllLeft();
 
@@ -2479,7 +2480,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // range.
         for (Range<Token> range : ranges)
         {
-            Collection<InetAddress> newReplicaEndpoints = Keyspace.open(keyspaceName).getReplicationStrategy().calculateNaturalEndpoints(range.right, temp);
+            Collection<InetAddress> newReplicaEndpoints = rs.calculateNaturalEndpoints(range.right, temp);
             newReplicaEndpoints.removeAll(currentReplicaEndpoints.get(range));
             if (logger.isDebugEnabled())
                 if (newReplicaEndpoints.isEmpty())
@@ -3345,9 +3346,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      */
     Collection<Range<Token>> getRangesForEndpoint(String keyspaceName, InetAddress ep)
     {
+        // TODO: use getAddressRanges(ep) for better performance
         return Keyspace.open(keyspaceName).getReplicationStrategy().getAddressRanges().get(ep);
     }
-
     /**
      * Get all ranges that span the ring given a set
      * of tokens. All ranges are in sorted order of

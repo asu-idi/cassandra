@@ -204,6 +204,16 @@ public abstract class AbstractReplicationStrategy
         return getAddressRanges(tokenMetadata.cloneOnlyTokenMap());
     }
 
+    public Collection<Range<Token>> getAddressRanges(TokenMetadata metadata, InetAddress endpoint)
+    {
+        return getAddressRanges(metadata).get(endpoint);
+    }
+
+    public Collection<Range<Token>> getAddressRanges(InetAddress endpoint)
+    {
+        return getAddressRanges(tokenMetadata.cloneOnlyTokenMap(), endpoint); // TODO: use cache
+    }
+
     public Collection<Range<Token>> getPendingAddressRanges(TokenMetadata metadata, Token pendingToken, InetAddress pendingAddress)
     {
         return getPendingAddressRanges(metadata, Arrays.asList(pendingToken), pendingAddress);

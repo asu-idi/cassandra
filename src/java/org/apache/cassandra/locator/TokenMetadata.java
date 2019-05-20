@@ -457,7 +457,6 @@ public class TokenMetadata
     public void removeEndpoint(InetAddress endpoint)
     {
         assert endpoint != null;
-
         lock.writeLock().lock();
         try
         {

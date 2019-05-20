@@ -24,11 +24,14 @@ import java.util.Map.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.TokenMetadata.Topology;
 import org.apache.cassandra.utils.FBUtilities;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Multimap;
 
 /**
@@ -72,6 +75,247 @@ public class NetworkTopologyStrategy extends AbstractReplicationStrategy
 
         datacenters = Collections.unmodifiableMap(newDatacenters);
         logger.trace("Configured datacenter replicas are {}", FBUtilities.toString(datacenters));
+    }
+
+    /**
+     * Helper Class for holding token ranges for NetworkTopologyStrategy,
+     * that are splitted by tokens from other DC.
+     */
+    @VisibleForTesting
+    public static class DCAwareTokens
+    {
+        private List<Token> tokens;
+
+        public DCAwareTokens()
+        {
+            tokens = new ArrayList<>();
+        }
+
+        public List<Token> getTokens()
+        {
+            return tokens;
+        }
+
+        public void add(Token token)
+        {
+            tokens.add(token);
+        }
+
+        public Token getStartToken()
+        {
+            return tokens.get(0);
+        }
+
+        public List<Range<Token>> getTokenRanges()
+        {
+            ArrayList<Range<Token>> ret = new ArrayList<>();
+
+            for (int i = 1; i < tokens.size(); i++)
+            {
+                ret.add(new Range<>(tokens.get(i), tokens.get(i - 1)));
+            }
+
+            return ret;
+        }
+    }
+
+    /**
+     * Helper function to iterator through the current datacenter DCAwareTokens.
+     * For NetworkTopologyStrategy, the replication is based on each DC, so
+     * each DC is kind of having it's own token ring. For example:
+     *  DC1: 1, 6
+     *  DC2: 3, 8
+     * Token range 1-3, 3-6 are having the same replication location in DC1,
+     * even though it's splitted by token 3. DCAwareTokens basically groups
+     * token ranges 1-3, 3-6 together if we know we're only calculating for DC1.
+     * @param metadata
+     * @param start
+     * @param end
+     * @param datacenter
+     * @return Reverse Iterator for DCAwareTokens
+     */
+    @VisibleForTesting
+    public Iterator<DCAwareTokens> dcRingReverseIterator(final TokenMetadata metadata, Token start, final Token end, final String datacenter)
+    {
+        ArrayList<Token> ring = metadata.sortedTokens();
+
+        final int startIndex = ring.isEmpty() ? -1 : Collections.binarySearch(ring, start);
+
+        return new AbstractIterator<DCAwareTokens>()
+        {
+            int idx = startIndex;
+
+            protected DCAwareTokens computeNext()
+            {
+                if (idx < 0)
+                    return endOfData();
+
+                DCAwareTokens res = new DCAwareTokens();
+                Token token = ring.get(idx);
+                InetAddress firstEP = metadata.getEndpoint(token);
+                InetAddress ep;
+                String dc;
+
+                // Group tokens together if they're not from the requested datacenter or from the same endpoint
+                do
+                {
+                    res.add(token);
+                    idx--;
+                    if (idx < 0)
+                        idx = ring.size() - 1;
+                    token = ring.get(idx);
+                    ep = metadata.getEndpoint(token);
+                    dc = snitch.getDatacenter(ep);
+                    // check if it reachs the end
+                    if (idx == startIndex || token.equals(end))
+                    {
+                        idx = -1;
+                        break;
+                    }
+                } while (ep.equals(firstEP) || !datacenter.equals(dc));
+
+                res.add(token);
+                return res;
+            }
+        };
+    }
+
+    private List<Range<Token>> getTokenRanges(Collection<Token> ring)
+    {
+        List<Range<Token>> res = new ArrayList<>();
+
+        Iterator<Token> tokenIterator = ring.iterator();
+
+        if (!tokenIterator.hasNext()) return res;
+
+        Token first = tokenIterator.next();
+        Token start = first;
+        while (tokenIterator.hasNext())
+        {
+            Token end = tokenIterator.next();
+            res.add(new Range<>(start, end));
+            start = end;
+        }
+        res.add(new Range<>(start, first));
+        return res;
+    }
+
+
+    /**
+     * Get all token ranges that are stored on one endpoint. This is baisically a reverse version
+     * of calculateNaturalEndpoints(). It's much faster than caculating all token natural endpoints
+     * and returns only one endpoint. In worst case, it only iterate through the token ring once.
+     * @param metadata
+     * @param endpoint
+     * @return
+     */
+    @Override
+    public Collection<Range<Token>> getAddressRanges(TokenMetadata metadata, InetAddress endpoint)
+    {
+        Collection<Range<Token>> res = new HashSet<>();
+
+        final String epDC = snitch.getDatacenter(endpoint);
+        final String epRack = snitch.getRack(endpoint);
+        if (!datacenters.containsKey(epDC))
+            return res;
+
+        final int RF = getReplicationFactor(epDC);
+        if (RF == 0)
+            return res;
+
+        Topology topology = metadata.getTopology();
+        // all racks in a DC so we can check when we have exhausted all racks in a DC
+        Multimap<String, InetAddress> allRacks = topology.getDatacenterRacks().get(epDC);
+        final int RACKNUM = allRacks.keySet().size();
+
+        // each rack can have maximum 1 replica
+        if (RF <= RACKNUM)
+        {
+            for (Range<Token> range : getTokenRanges(metadata.getTokens(endpoint)))
+            {
+                Set<String> seenRacks = new HashSet<>();
+                Iterator<DCAwareTokens> dcTokenIterator = dcRingReverseIterator(metadata, range.right, range.left, epDC);
+
+                assert(dcTokenIterator.hasNext());
+
+                DCAwareTokens dcTokens = dcTokenIterator.next();
+                res.addAll(dcTokens.getTokenRanges()); // Always include the primary range
+                seenRacks.add(epRack);
+
+                while (dcTokenIterator.hasNext() &&
+                       (RF >= seenRacks.size())) // each distinct rack has one replica, stop if we found all replicas
+                {
+                    dcTokens = dcTokenIterator.next();
+                    Token t = dcTokens.getStartToken();
+                    InetAddress ep = metadata.getEndpoint(t);
+                    String rack = snitch.getRack(ep);
+                    if (epRack.equals(rack))  // If we see the same rack as the endpoint's one, any token before that won't be replicated to the endpoint.
+                        break;
+
+                    if (RF > seenRacks.size() || seenRacks.contains(rack))
+                    {
+                        res.addAll(dcTokens.getTokenRanges());
+                    }
+                    seenRacks.add(rack);
+                }
+            }
+        }
+        else // each rack has at least 1 replica
+        {
+            // OVERFLOW number of replicas will be located on the "skipped" nodes which are right after the current endpoint
+            final int OVERFLOW = RF - RACKNUM;
+
+            for (Range<Token> range : getTokenRanges(metadata.getTokens(endpoint)))
+            {
+                Set<String> seenRacks = new HashSet<>();  // distinct rack we have seen
+                Set<InetAddress> seenEPs = new HashSet<>(); // distinct endpoint we have seen, each one can only have 1 replica
+
+                Iterator<DCAwareTokens> dcTokenIterator = dcRingReverseIterator(metadata, range.right, range.left, epDC);
+
+                assert(dcTokenIterator.hasNext());
+
+                DCAwareTokens dcTokens = dcTokenIterator.next();
+                res.addAll(dcTokens.getTokenRanges()); // Always include the primary range
+                seenRacks.add(epRack);
+                seenEPs.add(endpoint);
+
+                boolean isFirstEPRack = true;
+                while (dcTokenIterator.hasNext())
+                {
+                    dcTokens = dcTokenIterator.next();
+                    Token t = dcTokens.getStartToken();
+                    InetAddress ep = metadata.getEndpoint(t);
+                    String rack = snitch.getRack(ep);
+
+                    if (epRack.equals(rack))
+                    {
+                        isFirstEPRack = false;
+                    }
+
+                    seenEPs.add(ep);
+                    seenRacks.add(rack);
+                    int maxUniqueEndpoints = OVERFLOW + seenRacks.size();
+
+                    // stop searching if:
+                    //  1) it's no longer the first endpoint in the rack, and
+                    //  2) max unique endpoint won't cover the endpoint node
+                    if (!isFirstEPRack && maxUniqueEndpoints < seenEPs.size())
+                    {
+                        break;
+                    }
+
+                    // add it to the result if:
+                    //  1) max unique endpoint covers the endpoint, or
+                    //  2) we seen this endpoint before, adding it won't increase seenEPs.size()
+                    if (maxUniqueEndpoints > seenEPs.size() || seenEPs.contains(ep))
+                    {
+                        res.addAll(dcTokens.getTokenRanges());
+                    }
+                }
+            }
+        }
+
+        return res;
     }
 
     /**
