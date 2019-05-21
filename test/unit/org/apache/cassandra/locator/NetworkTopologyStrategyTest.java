@@ -291,6 +291,15 @@ public class NetworkTopologyStrategyTest
             Collection<Range<Token>> r2 = strategy.getAddressRanges(metadata, ep);
             assertThat(r2, is(r1));
         }
+
+        Multimap<Range<Token>, InetAddress> rangeAddresses = strategy.getRangeAddresses(metadata);
+        for (Range<Token> range : rangeAddresses.keySet())
+        {
+            Collection<InetAddress> e1 = rangeAddresses.get(range);
+            Collection<InetAddress> e2 = strategy.getNaturalEndpoints(range.right);
+            assertTrue(e1.containsAll(e2));
+            assertTrue(e2.containsAll(e1));
+        }
         return strategy;
     }
 
