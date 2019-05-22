@@ -531,23 +531,10 @@ public class RocksDBCF implements RocksDBCFMBean
         synchronized (dbhandle)
         {
             long startTime = System.currentTimeMillis();
-            // Wait until compaction catch up by examing the number of l0 sstables.
-            while (true)
-            {
-                int numOfLevel0Sstables = RocksDBProperty.getNumberOfSstablesByLevel(this, 0);
-                if (numOfLevel0Sstables <= RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER)
-                    break;
-                try
-                {
-                    logger.debug("Number of level0 sstables " + numOfLevel0Sstables + " exceeds the threshold " + RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER
-                                 + ", sleep for " + ingestionWaitMs + "ms.");
-                    Thread.sleep(ingestionWaitMs);
-                }
-                catch (InterruptedException e)
-                {
-                    logger.warn("Ingestion wait interrupted, procceding.");
-                }
+            if (!RocksDBConfigs.ALLOW_INGEST_BEHIND) {
+                waitUntilCompactionCatchUp(ingestionWaitMs);
             }
+
             rocksMetrics.rocksDBIngestWaitTimeHistogram.update(System.currentTimeMillis() - startTime);
             logger.info("Time spent waiting for compaction:" + (System.currentTimeMillis() - startTime));
 
@@ -558,6 +545,26 @@ public class RocksDBCF implements RocksDBCFMBean
             rocksMetrics.rocksDBIngestTimeHistogram.update(System.currentTimeMillis() - ingestStartTime);
         }
 
+    }
+
+    private void waitUntilCompactionCatchUp(long ingestionWaitMs) throws RocksDBException
+    {
+        while (true)
+        {
+            int numOfLevel0Sstables = RocksDBProperty.getNumberOfSstablesByLevel(this, 0);
+            if (numOfLevel0Sstables <= RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER)
+                break;
+            try
+            {
+                logger.debug("Number of level0 sstables " + numOfLevel0Sstables + " exceeds the threshold " + RocksDBConfigs.LEVEL0_STOP_WRITES_TRIGGER
+                             + ", sleep for " + ingestionWaitMs + "ms.");
+                Thread.sleep(ingestionWaitMs);
+            }
+            catch (InterruptedException e)
+            {
+                logger.warn("Ingestion wait interrupted, procceding.");
+            }
+        }
     }
 
     public Transaction beginTransaction(DecoratedKey partitionKey)
