@@ -420,4 +420,43 @@ public class TokenMetadataTest
         assertFalse(tokenMetadata.shouldUpdateTopology(first));
         assertTrue(tokenMetadata.shouldUpdateTopology(second));
     }
+
+    @Test
+    public void testRemoveEndpointTokenChange() throws Exception
+    {
+        TokenMetadata metadata = StorageService.instance.getTokenMetadata();
+        metadata.clearUnsafe();
+
+        Collection<Token> tokens = new HashSet<>();
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+        tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        InetAddress ep1 = InetAddress.getByName("127.0.0.1");
+        InetAddress ep2 = InetAddress.getByName("127.0.0.2");
+
+        Multimap<InetAddress, Token> endpointTokens = HashMultimap.create();
+        for (Token token : tokens)
+            endpointTokens.put(ep1, token);
+
+        endpointTokens.put(ep2, DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        long ver = metadata.getRingVersion();
+        metadata.updateNormalTokens(endpointTokens);
+        assertTrue(metadata.getRingVersion() > ver);
+
+        // Remove a normal endpoint
+        assertTrue(metadata.isMember(ep2));
+        ver = metadata.getRingVersion();
+        metadata.removeEndpoint(ep2);
+        assertFalse(metadata.isMember(ep2));
+        assertTrue(metadata.getRingVersion() > ver);
+
+        // Remove a non-exist endpoint (e.g. proxy node is not part of token metadata)
+        InetAddress ep3 = InetAddress.getByName("127.0.0.3");
+        assertFalse(metadata.isMember(ep3));
+        ver = metadata.getRingVersion();
+        metadata.removeEndpoint(ep3);
+        assertEquals(ver, metadata.getRingVersion());
+    }
+
 }

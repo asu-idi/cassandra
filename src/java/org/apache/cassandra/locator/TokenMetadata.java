@@ -28,6 +28,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.*;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -461,7 +462,6 @@ public class TokenMetadata
         try
         {
             bootstrapTokens.removeValue(endpoint);
-            tokenToEndpointMap.removeValue(endpoint);
             topology.removeEndpoint(endpoint);
             leavingEndpoints.remove(endpoint);
             if (replacementToOriginal.remove(endpoint) != null)
@@ -469,8 +469,12 @@ public class TokenMetadata
                 logger.debug("Node {} failed during replace.", endpoint);
             }
             endpointToHostIdMap.remove(endpoint);
-            sortedTokens = sortTokens();
-            invalidateCachedRings();
+            Collection<Token> removedTokens = tokenToEndpointMap.removeValue(endpoint);
+            if (CollectionUtils.isNotEmpty(removedTokens))
+            {
+                sortedTokens = sortTokens();
+                invalidateCachedRings();
+            }
         }
         finally
         {
