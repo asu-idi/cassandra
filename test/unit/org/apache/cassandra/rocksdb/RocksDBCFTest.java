@@ -181,18 +181,6 @@ public class RocksDBCFTest extends RocksDBTestBase
     }
 
     @Test
-    public void testTableIndexConfig() throws Exception
-    {
-        createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");
-        RocksDBCF rocksDBCF = getCurrentRocksDBCF();
-        IndexType properIndexType = rocksDBCF.getTableIndexType(IndexType.kHashSearch.toString());
-        assertEquals(IndexType.kHashSearch, properIndexType);
-        IndexType improperIndexType = rocksDBCF.getTableIndexType("notARealIndexType");
-        // An improper index type will revert to the default which is kBinarySearch
-        assertEquals(IndexType.kBinarySearch, improperIndexType);
-    }
-
-    @Test
     public void testGetCorrectRocksdbInstanceWithBoundaryHashValue() throws Exception
     {
         createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");

@@ -39,6 +39,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.EnvOptions;
+import org.rocksdb.IndexType;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileWriter;
@@ -74,11 +75,21 @@ public class RocksDBSStableWriter implements RocksDBDataWriter, AutoCloseable
         tableOptions.setFilter(new BloomFilter(10, false));
         tableOptions.setWholeKeyFiltering(!RocksDBConfigs.DATA_DISABLE_WHOLE_KEY_FILTERING);
         tableOptions.setBlockSize(RocksDBConfigs.DATA_BLOCK_SIZE);
-        this.options.setTableFormatConfig(tableOptions);
         if (RocksDBConfigs.DATA_ENABLE_PARTITION_TOKEN_KEY_FILTERING)
         {
             this.options.useFixedLengthPrefixExtractor(getTokenLength(cfId));
         }
+        if (RocksDBConfigs.USE_PARTITION_FILTER_AND_INDEX)
+        {
+            tableOptions.setIndexType(IndexType.kTwoLevelIndexSearch);
+            tableOptions.setPartitionFilters(true);
+        }
+        else
+        {
+            tableOptions.setIndexType(RocksDBConfigs.getTableIndexType());
+        }
+        this.options.setTableFormatConfig(tableOptions);
+
         this.shardId = shardId;
         RocksDBThroughputManager.getInstance().registerIncomingStreamWriter(this);
     }

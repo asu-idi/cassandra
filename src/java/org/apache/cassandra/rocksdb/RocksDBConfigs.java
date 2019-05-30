@@ -2,11 +2,15 @@ package org.apache.cassandra.rocksdb;
 
 import java.io.File;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.rocksdb.CompressionType;
 import org.rocksdb.IndexType;
 
 public class RocksDBConfigs
 {
+    private static final Logger logger = LoggerFactory.getLogger(RocksDBConfigs.class);
     public static final CompressionType COMPRESSION_TYPE = CompressionType.getCompressionType(
     System.getProperty("cassandra.rocksdb.compression_type", "lz4")
     );
@@ -22,6 +26,7 @@ public class RocksDBConfigs
     public static final long HARD_PENDING_COMPACTION_BYTES_LIMIT = Long.getLong("cassandra.rocksdb.hard_pending_compaction_bytes_limit", 0);
     public static final boolean ALLOW_INGEST_BEHIND = Boolean.getBoolean("cassandra.rocksdb.allow_ingest_behind");
     public static final boolean DUMP_MALLOC_STATS = Boolean.getBoolean("cassandra.rocksdb.dump_malloc_stats");
+    public static final boolean USE_PARTITION_FILTER_AND_INDEX = Boolean.getBoolean("cassandra.rocksdb.use_partition_filter_and_index");
 
     // Paths for storing RocksDB files.
     public static String ROCKSDB_DIR = System.getProperty("cassandra.rocksdb.dir", "/data/rocksdb");
@@ -137,4 +142,18 @@ public class RocksDBConfigs
     // Once enabled, the writes are written to both Cassandra and RocksDB which is future used to caclulate
     // the consistency and correctness of RocksDB.
     public static boolean ROCKSDB_DOUBLE_WRITE = Boolean.getBoolean("cassandra.rocksdb.double_write");
+
+    public static IndexType getTableIndexType()
+    {
+        try
+        {
+            return IndexType.valueOf(RocksDBConfigs.TABLE_INDEX_TYPE);
+        }
+        catch (Throwable e)
+        {
+            logger.warn("Failed to set table index type " + RocksDBConfigs.TABLE_INDEX_TYPE, e);
+            logger.warn("Setting table index type to default: " + IndexType.kBinarySearch.toString());
+            return IndexType.kBinarySearch;
+        }
+    }
 }

@@ -141,13 +141,21 @@ public class RocksDBCF implements RocksDBCFMBean
         tableOptions.setBlockCache(engine.cache);
         tableOptions.setCacheIndexAndFilterBlocks(RocksDBConfigs.CACHE_INDEX_AND_FILTER_BLOCKS);
         tableOptions.setPinL0FilterAndIndexBlocksInCache(RocksDBConfigs.PIN_L0_FILTER_AND_INDEX_BLOCKS_IN_CACHE);
-        tableOptions.setIndexType(getTableIndexType(RocksDBConfigs.TABLE_INDEX_TYPE));
         tableOptions.setBlockSize(RocksDBConfigs.DATA_BLOCK_SIZE);
+        if(RocksDBConfigs.USE_PARTITION_FILTER_AND_INDEX)
+        {
+            tableOptions.setIndexType(IndexType.kTwoLevelIndexSearch);
+            tableOptions.setPartitionFilters(true);
+        }
+        else
+        {
+            tableOptions.setIndexType(RocksDBConfigs.getTableIndexType());
+        }
 
         final BlockBasedTableConfig metaTableOption = new BlockBasedTableConfig();
         metaTableOption.setFilter(new BloomFilter(10, false));
         metaTableOption.setBlockCache(engine.metaCache);
-        metaTableOption.setIndexType(getTableIndexType(RocksDBConfigs.TABLE_INDEX_TYPE));
+        metaTableOption.setIndexType(RocksDBConfigs.getTableIndexType());
 
         rocksDBHandles = new ArrayList<>(NUM_SHARD);
 
@@ -200,11 +208,6 @@ public class RocksDBCF implements RocksDBCFMBean
         }
     }
 
-    private String getRocksDBDataDirFromShard(Integer shardId)
-    {
-        return NUM_SHARD == 1 ? this.dataDir : Paths.get(this.dataDir, String.valueOf(shardId)).toString();
-    }
-
     private int shardIDForToken(Token token)
     {
         return Math.abs(token.hashCode() % RocksDBConfigs.NUM_SHARD);
@@ -235,20 +238,6 @@ public class RocksDBCF implements RocksDBCFMBean
     private RocksDBInstanceHandle getDBHandleForPartitionKey(DecoratedKey partitionKey)
     {
         return rocksDBHandles.get(getShardIdForKey(partitionKey));
-    }
-
-    public IndexType getTableIndexType(String indexType)
-    {
-        try
-        {
-            return IndexType.valueOf(indexType);
-        }
-        catch (Throwable e)
-        {
-            logger.warn("Failed to set table index type " + indexType, e);
-            logger.warn("Setting table index type to default: " + IndexType.kBinarySearch.toString());
-            return IndexType.kBinarySearch;
-        }
     }
 
     public RocksDBIteratorAdapter newIterator(DecoratedKey partitionKey)
