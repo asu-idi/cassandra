@@ -46,6 +46,7 @@ public class GossipDigestAckVerbHandler implements IVerbHandler<GossipDigestAck>
             return;
         }
 
+        Gossiper.markReceivedFirstGossipMessage();
         GossipDigestAck gDigestAckMessage = message.payload;
         List<GossipDigest> gDigestList = gDigestAckMessage.getGossipDigestList();
         Map<InetAddress, EndpointState> epStateMap = gDigestAckMessage.getEndpointStateMap();
@@ -74,6 +75,7 @@ public class GossipDigestAckVerbHandler implements IVerbHandler<GossipDigestAck>
             /* Notify the Failure Detector */
             Gossiper.instance.notifyFailureDetector(epStateMap);
             Gossiper.instance.applyStateLocally(epStateMap);
+            Gossiper.markProcessedFirstGossipMessage();
         }
 
         /* Get the state required to send to this gossipee - construct GossipDigestAck2Message */

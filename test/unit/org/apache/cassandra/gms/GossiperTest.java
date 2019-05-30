@@ -29,6 +29,9 @@ import com.google.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.IPartitioner;
@@ -52,6 +55,8 @@ public class GossiperTest
     ArrayList<Token> keyTokens = new ArrayList<>();
     List<InetAddress> hosts = new ArrayList<>();
     List<UUID> hostIds = new ArrayList<>();
+
+    private static final Logger logger = LoggerFactory.getLogger(GossiperTest.class);
 
     @Before
     public void setup()
@@ -176,5 +181,33 @@ public class GossiperTest
             // clean up the gossip states
             Gossiper.instance.endpointStateMap.clear();
         }
+    }
+
+    private final static int MAX_PROCESSING_POLLS = 7;
+    static
+    {
+        // Make the GossipSettle test faster
+        System.setProperty("cassandra.gossip_settle_min_wait_ms", "100");
+        System.setProperty("cassandra.gossip_settle_poll_interval_ms", "100");
+        System.setProperty("cassandra.gossip_settle_message_processing_max_polls", String.valueOf(MAX_PROCESSING_POLLS));
+    }
+
+    @Test
+    public void testGossipSettle()
+    {
+        // Max wait without getting any gossip message
+        final int DEFAULT_NUM_POLLS = 3;
+        int numPolls = Gossiper.waitToSettle();
+        assertEquals(DEFAULT_NUM_POLLS, numPolls);
+
+        // Max wait with getting a gossip message, but not finished
+        Gossiper.markReceivedFirstGossipMessage();
+        numPolls = Gossiper.waitToSettle();
+        assertEquals(MAX_PROCESSING_POLLS + DEFAULT_NUM_POLLS, numPolls);
+
+        // No extra wait if the first gossip message is processed
+        Gossiper.markProcessedFirstGossipMessage();
+        numPolls = Gossiper.waitToSettle();
+        assertEquals(DEFAULT_NUM_POLLS, numPolls);
     }
 }

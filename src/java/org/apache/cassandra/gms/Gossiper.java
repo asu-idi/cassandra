@@ -140,6 +140,9 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
     private volatile UnreachableQuarantineState.State unreachableQuarantineState = UnreachableQuarantineState.initialState();
 
+    private volatile static boolean receivedFirstGossipMessage = false;
+    private volatile static boolean processedFirstGossipMessage = false;
+
     private class GossipTask implements Runnable
     {
         public void run()
@@ -1646,27 +1649,69 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         return null;
     }
 
-    public static void waitToSettle()
+    public static void markReceivedFirstGossipMessage()
     {
+        receivedFirstGossipMessage = true;
+    }
+
+    public static void markProcessedFirstGossipMessage()
+    {
+        processedFirstGossipMessage = true;
+    }
+
+    /**
+     * Wait gossip to settle, it has 3 steps:
+     * 1. Wait GOSSIP_SETTLE_MIN_WAIT_MS (5 seconds by default);
+     * 2. Wait the first gossip message to be processed if it's ever received one;
+     *      For a new node (or cassandra.load_ring_state=false), processing the first gossip message could take
+     *      long time, espically for a large cluster.
+     * 3. Wait the endpoints number is stable for 3 polls (3 seconds by default).
+     * @return waited polls, only for unittest
+     */
+    public static int waitToSettle()
+    {
+        int totalPolls = 0;
         int forceAfter = Integer.getInteger("cassandra.skip_wait_for_gossip_to_settle", -1);
         if (forceAfter == 0)
-        {
-            return;
-        }
-        final int GOSSIP_SETTLE_MIN_WAIT_MS = 5000;
-        final int GOSSIP_SETTLE_POLL_INTERVAL_MS = 1000;
-        final int GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED = 3;
+            return totalPolls;
+
+        final int GOSSIP_SETTLE_MIN_WAIT_MS = Integer.getInteger("cassandra.gossip_settle_min_wait_ms", 5000);
+        final int GOSSIP_SETTLE_POLL_INTERVAL_MS = Integer.getInteger("cassandra.gossip_settle_poll_interval_ms", 1000);
+        final int GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED = Integer.getInteger("cassandra.gossip_settle_poll_sucesses_required", 3);
+        final int GOSSIP_SETTLE_MESSAGE_PROCESSING_MAX_POLLS = Integer.getInteger("cassandra.gossip_settle_message_processing_max_polls", 300);
 
         logger.info("Waiting for gossip to settle...");
         Uninterruptibles.sleepUninterruptibly(GOSSIP_SETTLE_MIN_WAIT_MS, TimeUnit.MILLISECONDS);
-        int totalPolls = 0;
+
+        int numPolls = 0;
+        if (receivedFirstGossipMessage)
+        {
+            while (!processedFirstGossipMessage)
+            {
+                if (numPolls >= GOSSIP_SETTLE_MESSAGE_PROCESSING_MAX_POLLS)
+                {
+                    logger.error("The first Gossip message processing is not finished after {} polls", numPolls);
+                    break;
+                }
+                Uninterruptibles.sleepUninterruptibly(GOSSIP_SETTLE_POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
+                numPolls++;
+            }
+            logger.info("Waited Gossip message processing for {} polls", numPolls);
+        }
+        else
+        {
+            logger.info("No Gossip message received");
+        }
+        totalPolls += numPolls;
+
+        numPolls = 0;
         int numOkay = 0;
         int epSize = Gossiper.instance.getEndpointStates().size();
         while (numOkay < GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED)
         {
             Uninterruptibles.sleepUninterruptibly(GOSSIP_SETTLE_POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
             int currentSize = Gossiper.instance.getEndpointStates().size();
-            totalPolls++;
+            numPolls++;
             if (currentSize == epSize)
             {
                 logger.debug("Gossip looks settled.");
@@ -1674,21 +1719,24 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             }
             else
             {
-                logger.info("Gossip not settled after {} polls.", totalPolls);
+                logger.info("Gossip not settled after {} polls.", numPolls);
                 numOkay = 0;
             }
             epSize = currentSize;
-            if (forceAfter > 0 && totalPolls > forceAfter)
+            if (forceAfter > 0 && numPolls > forceAfter)
             {
                 logger.warn("Gossip not settled but startup forced by cassandra.skip_wait_for_gossip_to_settle. Gossip total polls: {}",
-                            totalPolls);
+                            numPolls);
                 break;
             }
         }
-        if (totalPolls > GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED)
-            logger.info("Gossip settled after {} extra polls; proceeding", totalPolls - GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED);
+        if (numPolls > GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED)
+            logger.info("Gossip settled after {} extra polls; proceeding", numPolls - GOSSIP_SETTLE_POLL_SUCCESSES_REQUIRED);
         else
             logger.info("No gossip backlog; proceeding");
+
+        totalPolls += numPolls;
+        return totalPolls;
     }
 
 }
