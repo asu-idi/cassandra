@@ -470,7 +470,7 @@ public class TokenMetadata
             }
             endpointToHostIdMap.remove(endpoint);
             Collection<Token> removedTokens = tokenToEndpointMap.removeValue(endpoint);
-            if (CollectionUtils.isNotEmpty(removedTokens))
+            if (removedTokens != null && !removedTokens.isEmpty())
             {
                 sortedTokens = sortTokens();
                 invalidateCachedRings();
