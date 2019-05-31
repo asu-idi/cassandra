@@ -122,7 +122,11 @@ public class ResultSet
             for (int i = 0; i < metadata.columnCount; i++)
             {
                 Column col = new Column(ByteBufferUtil.bytes(metadata.names.get(i).name.toString()));
-                col.setValue(row.get(i).duplicate());
+                // TTL is often returned as null if it was not set or reset to 0. This would avoid a NPE
+                if (row.get(i) != null)
+                {
+                    col.setValue(row.get(i).duplicate());
+                }
                 thriftCols.add(col);
             }
             // The key of CqlRow shoudn't be needed in CQL3
