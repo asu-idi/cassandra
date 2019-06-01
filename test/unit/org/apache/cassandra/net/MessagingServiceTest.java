@@ -75,7 +75,7 @@ public class MessagingServiceTest
     @Test
     public void testMessagingServiceSettle() throws Exception
     {
-        final int NO_CONN_WAIT = 4;
+        final int NO_CONN_WAIT = 6;
         SchemaLoader.prepareServer();
         StorageService.instance.initServer();
 

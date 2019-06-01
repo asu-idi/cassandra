@@ -522,10 +522,10 @@ public final class MessagingService implements MessagingServiceMBean
         // By default, poll every second
         final int SERVER_SOCKET_POLL_INTERVAL_MS = Integer.getInteger("cassandra.messaging_service_settle_poll_interval_ms", 1000);
 
-        final int SERVER_SOCKET_POLL_SUCCESSES_REQUIRED = 3;
+        final int SERVER_SOCKET_POLL_SUCCESSES_REQUIRED = 5;
 
-        // By default if the new incoming connection rate is <= 5 per poll interval, we consider it's settled for that interval
-        final int SERVER_SOCKET_SETTLE_RATE = Integer.getInteger("cassandra.messaging_service_settle_new_conn_rate", 5);
+        // By default if the new incoming connection rate is <= 3 per poll interval, we consider it's settled for that interval
+        final int SERVER_SOCKET_SETTLE_RATE = Integer.getInteger("cassandra.messaging_service_settle_new_conn_rate", 3);
 
         List<Integer> previousNumOfSockets = null;
 
