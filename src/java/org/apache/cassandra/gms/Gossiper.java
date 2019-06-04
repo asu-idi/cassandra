@@ -36,6 +36,7 @@ import com.google.common.util.concurrent.Uninterruptibles;
 
 import com.codahale.metrics.RatioGauge;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
+import org.apache.cassandra.config.Config;
 import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,7 +221,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             try
             {
                 unreachableQuarantineLock.lock();
-                unreachableQuarantineState = unreachableQuarantineState.doNext(getUnreachableRatio(), DatabaseDescriptor.getUnreachableEndpointsRatioThreshold());
+                unreachableQuarantineState = unreachableQuarantineState.doNext(getUnreachableRatio());
             }
             catch (Exception e)
             {
@@ -782,6 +783,16 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             add(VersionedValue.STATUS_NORMAL); // node is legit in the cluster or it was stopped with kill -9
             add(VersionedValue.SHUTDOWN); }}; // node was shutdown
         return !unsafeStatuses.contains(status);
+    }
+
+    public double getReachableQuarantineThreshold()
+    {
+        return DatabaseDescriptor.getReachableEndpointsRatioThreshold();
+    }
+
+    public void setReachableQuarantineThreshold(double threshold)
+    {
+        DatabaseDescriptor.setReachableEndpointsRatioThreshold(threshold);
     }
 
     public double getUnreachableQuarantineThreshold()

@@ -145,7 +145,9 @@ public class NodeTool
                 FailureDetectorInfo.class,
                 RefreshSizeEstimates.class,
                 GetUnreachableQuarantineThreshold.class,
-                SetUnreachableQuarantineThreshold.class
+                SetUnreachableQuarantineThreshold.class,
+                GetReachableQuarantineThreshold.class,
+                SetReachableQuarantineThreshold.class
         );
 
         Cli.CliBuilder<Runnable> builder = Cli.builder("nodetool");

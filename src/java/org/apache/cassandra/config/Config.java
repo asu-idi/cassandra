@@ -340,12 +340,17 @@ public class Config
      */
     public UserFunctionTimeoutPolicy user_function_timeout_policy = UserFunctionTimeoutPolicy.die;
 
-    /*
+    /**
      * Ratio of unreachableEndpoints/totalEndpoints that would trigger a node to quarantine itself.
      * Endpoints are determined through gossip.
      * Default value of 0 disables the self-quarantine feature.
      */
     public volatile double unreachable_endpoints_ratio_threshold = 0;
+
+    /**
+     * Ratio of reachableEndpoints/totalEndpoints that would allow a quarantined node to reset itself.
+     */
+    public volatile double reachable_endpoints_ratio_threshold = 0.5;
 
     public static boolean getOutboundBindAny()
     {

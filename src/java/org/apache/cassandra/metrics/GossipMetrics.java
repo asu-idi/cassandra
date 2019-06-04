@@ -30,4 +30,5 @@ public class GossipMetrics
     public static final Counter unreachableQuarantinePrepareForQuarantine = Metrics.counter(factory.createMetricName("UnreachableQuarantinePrepareForQuarantine"));
     public static final Counter unreachableQuarantineQuarantined = Metrics.counter(factory.createMetricName("UnreachableQuarantineQuarantined"));
     public static final Counter unreachableQuarantinePrepareForReset = Metrics.counter(factory.createMetricName("UnreachableQuarantinePrepareForReset"));
+    public static final Counter unreachableQuarantinePrepareForResetSettleEndpoints = Metrics.counter(factory.createMetricName("UnreachableQuarantinePrepareForResetSettleEndpoints"));
 }

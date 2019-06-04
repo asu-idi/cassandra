@@ -1520,6 +1520,16 @@ public class NodeProbe implements AutoCloseable
         }
     }
 
+    public double getReachableQuarantineThreshold()
+    {
+        return gossProxy.getReachableQuarantineThreshold();
+    }
+
+    public void setReachableQuarantineThreshold(double value)
+    {
+        gossProxy.setReachableQuarantineThreshold(value);
+    }
+
     public double getUnreachableQuarantineThreshold()
     {
         return gossProxy.getUnreachableQuarantineThreshold();

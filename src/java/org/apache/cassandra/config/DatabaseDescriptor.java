@@ -2100,4 +2100,11 @@ public class DatabaseDescriptor
     {
         conf.unreachable_endpoints_ratio_threshold = threshold;
     }
+
+    public static double getReachableEndpointsRatioThreshold() { return conf.reachable_endpoints_ratio_threshold; }
+
+    public static void setReachableEndpointsRatioThreshold(double threshold)
+    {
+        conf.reachable_endpoints_ratio_threshold = threshold;
+    }
 }

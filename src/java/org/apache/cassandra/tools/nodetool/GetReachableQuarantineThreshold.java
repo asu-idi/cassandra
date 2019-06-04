@@ -15,26 +15,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.gms;
 
-import java.net.UnknownHostException;
+package org.apache.cassandra.tools.nodetool;
 
-public interface GossiperMBean
+import io.airlift.command.Command;
+import org.apache.cassandra.tools.NodeProbe;
+import org.apache.cassandra.tools.NodeTool;
+
+@Command(name = "getreachablequarantinethreshold", description = "Print the current reachable endpoints ratio threshold")
+public class GetReachableQuarantineThreshold extends NodeTool.NodeToolCmd
 {
-    public long getEndpointDowntime(String address) throws UnknownHostException;
-
-    public int getCurrentGenerationNumber(String address) throws UnknownHostException;
-
-    public void unsafeAssassinateEndpoint(String address) throws UnknownHostException;
-
-    public void assassinateEndpoint(String address) throws UnknownHostException;
-
-    public double getReachableQuarantineThreshold();
-
-    public void setReachableQuarantineThreshold(double value);
-
-    public double getUnreachableQuarantineThreshold();
-
-    public void setUnreachableQuarantineThreshold(double value);
-
+    @Override
+    public void execute(NodeProbe probe)
+    {
+        System.out.println("Current reachable quarantine threshold: " + probe.getReachableQuarantineThreshold());
+    }
 }
