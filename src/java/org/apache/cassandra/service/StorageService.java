@@ -1771,6 +1771,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
     }
 
+    public void beforeAlive(InetAddress endpoint, EndpointState state) { }
+
     private static String[] splitValue(VersionedValue value)
     {
         return value.value.split(VersionedValue.DELIMITER_STR, -1);

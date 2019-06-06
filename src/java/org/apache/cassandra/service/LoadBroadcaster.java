@@ -63,6 +63,8 @@ public class LoadBroadcaster implements IEndpointStateChangeSubscriber
     
     public void beforeChange(InetAddress endpoint, EndpointState currentState, ApplicationState newStateKey, VersionedValue newValue) {}
 
+    public void beforeAlive(InetAddress endpoint, EndpointState state) {}
+
     public void onAlive(InetAddress endpoint, EndpointState state) {}
 
     public void onDead(InetAddress endpoint, EndpointState state) {}

@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -38,7 +37,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.Uninterruptibles;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.slf4j.Logger;
@@ -513,59 +511,6 @@ public final class MessagingService implements MessagingServiceMBean
             listen(FBUtilities.getBroadcastAddress());
         }
         listenGate.signalAll();
-    }
-
-    public static int waitServerIncomingConnectionSettle(int serverSocketPollMax)
-    {
-        if (!MessagingService.instance().isListening()) return 0;
-
-        // By default, poll every second
-        final int SERVER_SOCKET_POLL_INTERVAL_MS = Integer.getInteger("cassandra.messaging_service_settle_poll_interval_ms", 1000);
-
-        final int SERVER_SOCKET_POLL_SUCCESSES_REQUIRED = 5;
-
-        // By default if the new incoming connection rate is <= 3 per poll interval, we consider it's settled for that interval
-        final int SERVER_SOCKET_SETTLE_RATE = Integer.getInteger("cassandra.messaging_service_settle_new_conn_rate", 3);
-
-        List<Integer> previousNumOfSockets = null;
-
-        int numOkay = 0;
-        int numPolls = 0;
-        logger.info("Waiting for MessageService incoming connection to settle...");
-        for (; numPolls < serverSocketPollMax; numPolls++)
-        {
-            if (numOkay >= SERVER_SOCKET_POLL_SUCCESSES_REQUIRED)
-            {
-                logger.info("MessagingService incoming connection settled after {} polls", numPolls);
-                return numPolls;
-            }
-            Uninterruptibles.sleepUninterruptibly(SERVER_SOCKET_POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
-
-            List<Integer> numOfSockets = MessagingService.instance().socketThreads.stream().map(st -> st.getNumSocketCreated()).collect(Collectors.toList());
-
-            boolean isOkay = true;
-            if (previousNumOfSockets == null || previousNumOfSockets.size() != numOfSockets.size())
-            {
-                isOkay = false;
-            }
-            else
-            {
-                for (int i = 0; i < previousNumOfSockets.size(); i++)
-                {
-                    int ratePerSecond = (numOfSockets.get(i) - previousNumOfSockets.get(i)) * 1000 / SERVER_SOCKET_POLL_INTERVAL_MS;
-                    if (ratePerSecond > SERVER_SOCKET_SETTLE_RATE)
-                    {
-                        logger.debug("Waiting for MessagingService incoming connection to settle, waited polls: {}", numPolls);
-                        isOkay = false;
-                        break;
-                    }
-                }
-            }
-            numOkay = isOkay ? numOkay + 1 : 0;
-            previousNumOfSockets = numOfSockets;
-        }
-        logger.info("MessagingService incoming connection is not settled but forced to start. Number of polls: {}", numPolls);
-        return numPolls;
     }
 
     /**
@@ -1121,19 +1066,6 @@ public final class MessagingService implements MessagingServiceMBean
             this.server = server;
         }
 
-        private volatile int numSocketCreated = 0;
-
-        public int getNumSocketCreated()
-        {
-            return numSocketCreated;
-        }
-
-        @VisibleForTesting
-        public void bumpNumSocketCreatedForTest()
-        {
-            numSocketCreated++;
-        }
-
         @SuppressWarnings("resource")
         public void run()
         {
@@ -1143,7 +1075,6 @@ public final class MessagingService implements MessagingServiceMBean
                 try
                 {
                     socket = server.accept();
-                    numSocketCreated++;
                     if (!authenticate(socket))
                     {
                         logger.trace("remote failed to authenticate");

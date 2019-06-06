@@ -84,6 +84,11 @@ public class ReconnectableSnitchHelper implements IEndpointStateChangeSubscriber
             reconnect(endpoint, value);
     }
 
+    public void beforeAlive(InetAddress endpoint, EndpointState state)
+    {
+        // do nothing.
+    }
+
     public void onAlive(InetAddress endpoint, EndpointState state)
     {
         if (preferLocal && state.getApplicationState(ApplicationState.INTERNAL_IP) != null)

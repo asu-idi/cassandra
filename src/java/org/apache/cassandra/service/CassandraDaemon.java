@@ -62,6 +62,7 @@ import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.StartupException;
+import org.apache.cassandra.gms.GossipConnectivityChecker;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.hints.HintsService;
 import org.apache.cassandra.hints.LegacyHintsMigrator;
@@ -422,9 +423,6 @@ public class CassandraDaemon
         if (sizeRecorderInterval > 0)
             ScheduledExecutors.optionalTasks.scheduleWithFixedDelay(SizeEstimatesRecorder.instance, 30, sizeRecorderInterval, TimeUnit.SECONDS);
 
-        // Wait for incoming connections are settled before enabling Thrift and CQL
-        MessagingService.waitServerIncomingConnectionSettle(Gossiper.instance.getEndpointStates().size());
-
         // Thrift
         InetAddress rpcAddr = DatabaseDescriptor.getRpcAddress();
         int rpcPort = DatabaseDescriptor.getRpcPort();
@@ -503,6 +501,23 @@ public class CassandraDaemon
         setup();
     }
 
+    private void waitGossipConnectionSettle()
+    {
+        final long echoTimeout = DatabaseDescriptor.getTimeout(MessagingService.Verb.ECHO);
+
+        final int pollInterval = Integer.getInteger("cassandra.gossip_connection_settle_poll_interval_ms", 1000);
+        final int maxPolls = Integer.getInteger("cassandra.gossip_connection_settle_max_polls",
+                                                Gossiper.instance.getEndpointStates().size() / 2);
+        final int requiredPolls = Integer.getInteger("cassandra.gossip_connection_settle_required_polls",
+                                                     Math.toIntExact(echoTimeout / pollInterval));
+        final int openingConnectionThreshold =  Integer.getInteger("cassandra.gossip_connection_settle_opening_threshold", 1);
+
+        logger.info("Waiting for gossip connection settle (max polls: {}, required polls: {}, echo timeout: {} ms)", maxPolls, requiredPolls, echoTimeout);
+        GossipConnectivityChecker checker = new GossipConnectivityChecker(maxPolls, requiredPolls, echoTimeout, pollInterval, openingConnectionThreshold);
+        checker.waitConnectionSettle();
+        logger.info("Up node: {}, Down node: {}", Gossiper.instance.getLiveMembers().size(), Gossiper.instance.getUnreachableMembers().size());
+    }
+
     /**
      * Start the Cassandra Daemon, assuming that it has already been
      * initialized via {@link #init(String[])}
@@ -511,6 +526,8 @@ public class CassandraDaemon
      */
     public void start()
     {
+        waitGossipConnectionSettle();
+
         String nativeFlag = System.getProperty("cassandra.start_native_transport");
         if ((nativeFlag != null && Boolean.parseBoolean(nativeFlag)) || (nativeFlag == null && DatabaseDescriptor.startNativeTransport()))
         {
