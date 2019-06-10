@@ -1014,12 +1014,8 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
     }
 
-    @VisibleForTesting
-    public void markAlive(final InetAddress addr, final EndpointState localState)
+    private void markAlive(final InetAddress addr, final EndpointState localState)
     {
-        for (IEndpointStateChangeSubscriber subscriber : subscribers)
-            subscriber.beforeAlive(addr, localState);
-
         if (MessagingService.instance().getVersion(addr) < MessagingService.VERSION_20)
         {
             realMarkAlive(addr, localState);
@@ -1106,9 +1102,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
         }
 
         if (!isDeadState(epState))
-        {
             markAlive(ep, epState);
-        }
         else
         {
             logger.debug("Not marking {} alive due to dead state", ep);
@@ -1211,7 +1205,7 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
                         applyNewStates(ep, localEpStatePtr, remoteState);
                     }
                     else if (logger.isTraceEnabled())
-                        logger.trace("Ignoring remote version {} <= {} for {}", remoteMaxVersion, localMaxVersion, ep);
+                            logger.trace("Ignoring remote version {} <= {} for {}", remoteMaxVersion, localMaxVersion, ep);
 
                     if (!localEpStatePtr.isAlive() && !isDeadState(localEpStatePtr)) // unless of course, it was dead
                         markAlive(ep, localEpStatePtr);

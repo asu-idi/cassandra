@@ -712,7 +712,6 @@ public class StreamSession implements IEndpointStateChangeSubscriber
     public void onJoin(InetAddress endpoint, EndpointState epState) {}
     public void beforeChange(InetAddress endpoint, EndpointState currentState, ApplicationState newStateKey, VersionedValue newValue) {}
     public void onChange(InetAddress endpoint, ApplicationState state, VersionedValue value) {}
-    public void beforeAlive(InetAddress endpoint, EndpointState state) {}
     public void onAlive(InetAddress endpoint, EndpointState state) {}
     public void onDead(InetAddress endpoint, EndpointState state) {}
 

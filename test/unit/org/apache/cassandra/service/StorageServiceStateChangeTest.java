@@ -66,8 +66,6 @@ public class StorageServiceStateChangeTest
 
             public void onChange(InetAddress endpoint, ApplicationState state, VersionedValue value) { }
 
-            public void beforeAlive(InetAddress endpoint, EndpointState state) { }
-
             public void onAlive(InetAddress endpoint, EndpointState state) { }
 
             public void onDead(InetAddress endpoint, EndpointState state) { }
