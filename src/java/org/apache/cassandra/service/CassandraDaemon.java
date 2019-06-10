@@ -424,6 +424,7 @@ public class CassandraDaemon
 
         // Wait for incoming connections are settled before enabling Thrift and CQL
         MessagingService.waitServerIncomingConnectionSettle(Gossiper.instance.getEndpointStates().size());
+        logger.info("Up nodes: {}, Down nodes: {}", Gossiper.instance.getLiveMembers().size(), Gossiper.instance.getUnreachableMembers().size());
 
         // Thrift
         InetAddress rpcAddr = DatabaseDescriptor.getRpcAddress();

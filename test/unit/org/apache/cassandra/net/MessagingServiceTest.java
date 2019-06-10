@@ -75,19 +75,19 @@ public class MessagingServiceTest
     @Test
     public void testMessagingServiceSettle() throws Exception
     {
-        final int NO_CONN_WAIT = 6;
+        final int NO_CONN_WAIT = 11;
         SchemaLoader.prepareServer();
         StorageService.instance.initServer();
 
         // if no new connection, wait for 4 polls
-        int wait = MessagingService.waitServerIncomingConnectionSettle(10);
+        int wait = MessagingService.waitServerIncomingConnectionSettle(20);
         assertEquals(NO_CONN_WAIT, wait);
 
         // if there's ongoing new connections, wait for it
         Thread createSocket = new Thread(() -> {
             long start = System.nanoTime();
             long now = start;
-            while ((now - start) >> 20 < 500)
+            while ((now - start) / 1000000 < 1000) // keep opening new connections for 10 polls
             {
                 for (MessagingService.SocketThread st : MessagingService.instance().getSocketThreads())
                 {
@@ -107,10 +107,10 @@ public class MessagingServiceTest
         createSocket.start();
         createSocket.join(50);
 
-        wait = MessagingService.waitServerIncomingConnectionSettle(10);
+        wait = MessagingService.waitServerIncomingConnectionSettle(20);
         assertTrue(wait > NO_CONN_WAIT);
 
-        // the max wait works
+        // the maxWait works
         wait = MessagingService.waitServerIncomingConnectionSettle(2);
         assertEquals(2, wait);
     }

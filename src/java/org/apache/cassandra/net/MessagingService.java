@@ -522,7 +522,8 @@ public final class MessagingService implements MessagingServiceMBean
         // By default, poll every second
         final int SERVER_SOCKET_POLL_INTERVAL_MS = Integer.getInteger("cassandra.messaging_service_settle_poll_interval_ms", 1000);
 
-        final int SERVER_SOCKET_POLL_SUCCESSES_REQUIRED = 5;
+        // By default, wait at least 10 successes polls
+        final int SERVER_SOCKET_POLL_SUCCESSES_REQUIRED = 10;
 
         // By default if the new incoming connection rate is <= 3 per poll interval, we consider it's settled for that interval
         final int SERVER_SOCKET_SETTLE_RATE = Integer.getInteger("cassandra.messaging_service_settle_new_conn_rate", 3);
@@ -564,7 +565,10 @@ public final class MessagingService implements MessagingServiceMBean
             numOkay = isOkay ? numOkay + 1 : 0;
             previousNumOfSockets = numOfSockets;
         }
-        logger.info("MessagingService incoming connection is not settled but forced to start. Number of polls: {}", numPolls);
+        if (SERVER_SOCKET_POLL_SUCCESSES_REQUIRED < serverSocketPollMax)
+            logger.info("MessagingService incoming connection is not settled but forced to start. Number of polls: {}", numPolls);
+        else
+            logger.info("Waited the max poll number: {}", numPolls);
         return numPolls;
     }
 
@@ -1109,6 +1113,74 @@ public final class MessagingService implements MessagingServiceMBean
     }
 
     @VisibleForTesting
+    public static class IncomingConnectionBuilder extends Thread
+    {
+        private final Socket socket;
+        private final Set<Closeable> connections;
+
+        IncomingConnectionBuilder(Socket socket, Set<Closeable> connections)
+        {
+            super("MessagingService-Building-Incoming-" + socket.getInetAddress());
+            this.socket = socket;
+            this.connections = connections;
+        }
+
+        public void run()
+        {
+            try
+            {
+                if (!authenticate())
+                {
+                    logger.trace("remote failed to authenticate");
+                    socket.close();
+                    return;
+                }
+
+                socket.setKeepAlive(true);
+                socket.setSoTimeout(2 * OutboundTcpConnection.WAIT_FOR_VERSION_MAX_TIME);
+                // determine the connection type to decide whether to buffer
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                MessagingService.validateMagic(in.readInt());
+                int header = in.readInt();
+                boolean isStream = MessagingService.getBits(header, 3, 1) == 1;
+                int version = MessagingService.getBits(header, 15, 8);
+                logger.trace("Connection version {} from {}", version, socket.getInetAddress());
+                socket.setSoTimeout(0);
+
+                Thread thread = isStream
+                                ? new IncomingStreamingConnection(version, socket, connections)
+                                : new IncomingTcpConnection(version, MessagingService.getBits(header, 2, 1) == 1, socket, connections);
+                thread.start();
+                connections.add((Closeable) thread);
+            }
+            catch (AsynchronousCloseException e)
+            {
+                // this happens when another thread calls close().
+                logger.trace("Asynchronous close seen by server thread");
+            }
+            catch (ClosedChannelException e)
+            {
+                logger.trace("MessagingService server thread already closed");
+            }
+            catch (SSLHandshakeException e)
+            {
+                logger.error("SSL handshake error for inbound connection from " + socket, e);
+                FileUtils.closeQuietly(socket);
+            }
+            catch (Throwable t)
+            {
+                logger.trace("Error reading the socket {}", socket, t);
+                FileUtils.closeQuietly(socket);
+            }
+        }
+
+        private boolean authenticate()
+        {
+            return DatabaseDescriptor.getInternodeAuthenticator().authenticate(socket.getInetAddress(), socket.getPort());
+        }
+    }
+
+    @VisibleForTesting
     public static class SocketThread extends Thread
     {
         private final ServerSocket server;
@@ -1144,47 +1216,10 @@ public final class MessagingService implements MessagingServiceMBean
                 {
                     socket = server.accept();
                     numSocketCreated++;
-                    if (!authenticate(socket))
-                    {
-                        logger.trace("remote failed to authenticate");
-                        socket.close();
-                        continue;
-                    }
-
-                    socket.setKeepAlive(true);
-                    socket.setSoTimeout(2 * OutboundTcpConnection.WAIT_FOR_VERSION_MAX_TIME);
-                    // determine the connection type to decide whether to buffer
-                    DataInputStream in = new DataInputStream(socket.getInputStream());
-                    MessagingService.validateMagic(in.readInt());
-                    int header = in.readInt();
-                    boolean isStream = MessagingService.getBits(header, 3, 1) == 1;
-                    int version = MessagingService.getBits(header, 15, 8);
-                    logger.trace("Connection version {} from {}", version, socket.getInetAddress());
-                    socket.setSoTimeout(0);
-
-                    Thread thread = isStream
-                                  ? new IncomingStreamingConnection(version, socket, connections)
-                                  : new IncomingTcpConnection(version, MessagingService.getBits(header, 2, 1) == 1, socket, connections);
+                    Thread thread = new IncomingConnectionBuilder(socket, connections);
                     thread.start();
-                    connections.add((Closeable) thread);
                 }
-                catch (AsynchronousCloseException e)
-                {
-                    // this happens when another thread calls close().
-                    logger.trace("Asynchronous close seen by server thread");
-                    break;
-                }
-                catch (ClosedChannelException e)
-                {
-                    logger.trace("MessagingService server thread already closed");
-                    break;
-                }
-                catch (SSLHandshakeException e)
-                {
-                    logger.error("SSL handshake error for inbound connection from " + socket, e);
-                    FileUtils.closeQuietly(socket);
-                }
-                catch (Throwable t)
+                catch (IOException t)
                 {
                     logger.trace("Error reading the socket {}", socket, t);
                     FileUtils.closeQuietly(socket);
