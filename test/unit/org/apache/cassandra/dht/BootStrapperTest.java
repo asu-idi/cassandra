@@ -33,6 +33,7 @@ import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -256,6 +257,7 @@ public class BootStrapperTest
         }
     }
 
+    @Ignore("Please fix T46015013")
     @Test
     public void testSourceTargetComputation() throws UnknownHostException
     {
