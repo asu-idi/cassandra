@@ -1401,11 +1401,10 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
                                                               Gossiper.intervalInMillis,
                                                               Gossiper.intervalInMillis,
                                                               TimeUnit.MILLISECONDS);
-        if (isGossipOnlyMember(FBUtilities.getBroadcastAddress()))
-            ScheduledExecutors.scheduledTasks.scheduleWithFixedDelay(new UnreachableQuarantineTask(),
-                                                                     Gossiper.intervalInMillis,
-                                                                     Gossiper.intervalInMillis,
-                                                                     TimeUnit.MILLISECONDS);
+        ScheduledExecutors.scheduledTasks.scheduleWithFixedDelay(new UnreachableQuarantineTask(),
+                                                                 Gossiper.intervalInMillis,
+                                                                 Gossiper.intervalInMillis,
+                                                                 TimeUnit.MILLISECONDS);
     }
 
     /**
