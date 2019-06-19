@@ -562,8 +562,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             Multimap<InetAddress, Token> loadedTokens = SystemKeyspace.loadTokens();
             if (!shouldBootstrap()) // if we have not completed bootstrapping, we should not add ourselves as a normal token
                 loadedTokens.putAll(FBUtilities.getBroadcastAddress(), SystemKeyspace.getSavedTokens());
-            for (InetAddress ep : loadedTokens.keySet())
-                tokenMetadata.updateNormalTokens(loadedTokens.get(ep), ep);
+
+            tokenMetadata.updateNormalTokens(loadedTokens);
 
             logger.info("Token metadata: {}", tokenMetadata);
         }
