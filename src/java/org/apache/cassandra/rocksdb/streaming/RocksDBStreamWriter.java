@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.util.Collection;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +48,7 @@ public class RocksDBStreamWriter
     private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBStreamWriter.class);
     private static final long OUTGOING_BYTES_DELTA_UPDATE_THRESHOLD = 1 * 1024 * 1024;
     private final RocksDBCF rocksDBCF;
-    private final Collection<Range<Token>> ranges;
+    private final Range<Token> range;
     private final StreamManager.StreamRateLimiter limiter;
     private final MessageDigest digest;
     private final long estimatedTotalKeys;
@@ -58,10 +57,10 @@ public class RocksDBStreamWriter
     private long outgoingBytes;
     private long outgoingBytesDelta;
 
-    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Collection<Range<Token>> ranges, StreamManager.StreamRateLimiter limiter, long estimatedTotalKeys)
+    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Range<Token> range, StreamManager.StreamRateLimiter limiter, long estimatedTotalKeys)
     {
         this.rocksDBCF = rocksDBCF;
-        this.ranges = RocksDBStreamUtils.normalizeRanges(ranges);
+        this.range = range;
         this.limiter = limiter;
         this.outgoingBytes = 0;
         this.digest = FBUtilities.newMessageDigest("MD5");
@@ -70,15 +69,15 @@ public class RocksDBStreamWriter
         RocksDBThroughputManager.getInstance().registerOutgoingStreamWriter(this);
     }
 
-    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Collection<Range<Token>> ranges, StreamSession session, long estimatedTotalKeys)
+    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Range<Token> range, StreamSession session, long estimatedTotalKeys)
     {
-        this(rocksDBCF, ranges, StreamManager.getRateLimiter(session.peer), estimatedTotalKeys);
+        this(rocksDBCF, range, StreamManager.getRateLimiter(session.peer), estimatedTotalKeys);
         this.session = session;
     }
 
-    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Collection<Range<Token>> ranges)
+    public RocksDBStreamWriter(RocksDBCF rocksDBCF, Range<Token> range)
     {
-        this(rocksDBCF, ranges, new StreamManager.StreamRateLimiter(FBUtilities.getBroadcastAddress()), 0);
+        this(rocksDBCF, range, new StreamManager.StreamRateLimiter(FBUtilities.getBroadcastAddress()), 0);
     }
 
     public void write(OutputStream out) throws IOException
@@ -114,27 +113,19 @@ public class RocksDBStreamWriter
                                       .setReadaheadSize(RocksDBConfigs.STREAMING_READ_AHEAD_BUFFER_SIZE);
                 try (RocksDBIteratorAdapter iterator = rocksDBCF.newShardIterator(shardId, readOption, rocksCFName))
                 {
-                    writeShard(out, iterator, limit);
+                    writeForRange(out, iterator, range, limit);
                 }
                 LOGGER.info("Finished streaming shard " + shardId + " cf: " + rocksCFName.name());
                 out.write(RocksDBStreamUtils.EOF);
             }
         }
-        LOGGER.info("Ranges streamed: " + ranges);
+        LOGGER.info("Ranges streamed: " + range);
         LOGGER.info("Number of rocksdb entries written: " + streamedPairs);
         byte[] md5Digest = digest.digest();
         out.write(ByteBufferUtil.bytes(md5Digest.length).array());
         out.write(md5Digest);
         LOGGER.info("Stream digest: " + Hex.bytesToHex(md5Digest));
         updateProgress(true);
-    }
-
-    private void writeShard(OutputStream out, RocksDBIteratorAdapter iterator, int limit) throws IOException
-    {
-        for (Range<Token> range : ranges)
-        {
-            writeForRange(out, iterator, range, limit);
-        }
     }
 
     private void writeForRange(OutputStream out, RocksDBIteratorAdapter iterator, Range<Token> range, int limit) throws IOException

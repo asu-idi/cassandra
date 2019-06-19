@@ -175,21 +175,18 @@ public class RocksDBStreamUtilsTest
     @Test
     public void testGetRangeSpaceSize()
     {
-        assertEquals(0.0, RocksDBStreamUtils.getRangeSpaceSize(new ArrayList<>()), 1e-10);
         assertEquals(1.0,
                      RocksDBStreamUtils.getRangeSpaceSize(
-                                                         Arrays.asList(
-                                                                        new Range<Token>(Murmur3Partitioner.MINIMUM,
-                                                                                         new Murmur3Partitioner.LongToken(Murmur3Partitioner.MAXIMUM
-                                                                                         )))),
+                                                                    new Range<Token>(Murmur3Partitioner.MINIMUM,
+                                                                                     new Murmur3Partitioner.LongToken(Murmur3Partitioner.MAXIMUM
+                                                                                         ))),
                      1e-10);
 
         assertEquals(0.5,
                      RocksDBStreamUtils.getRangeSpaceSize(
-                                                         Arrays.asList(
-                                                                      new Range<Token>(RandomPartitioner.MINIMUM,
-                                                                                       new RandomPartitioner.BigIntegerToken(MAX_BIGINT_TOKEN.divide(BigInteger.valueOf(2)))
-                                                                                       ))),
+                                                                    new Range<Token>(RandomPartitioner.MINIMUM,
+                                                                                     new RandomPartitioner.BigIntegerToken(MAX_BIGINT_TOKEN.divide(BigInteger.valueOf(2)))
+                                                                                       )),
                      1e-10);
     }
 

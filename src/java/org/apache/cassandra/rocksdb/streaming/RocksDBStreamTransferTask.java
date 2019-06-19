@@ -39,7 +39,9 @@ public class RocksDBStreamTransferTask extends AbstractStreamTransferTask
 
     public synchronized void addTransferRocksdbFile(UUID cfId, RocksDBCF rocksDBCF, Collection<Range<Token>> ranges)
     {
-        RocksDBOutgoingMessage message = new RocksDBOutgoingMessage(cfId, sequenceNumber.getAndIncrement(), rocksDBCF, ranges);
-        files.put(message.sequenceNumber, message);
+        for (Range<Token> range : RocksDBStreamUtils.normalizeRanges(ranges)) {
+            RocksDBOutgoingMessage message = new RocksDBOutgoingMessage(cfId, sequenceNumber.getAndIncrement(), rocksDBCF, range);
+            files.put(message.sequenceNumber, message);
+        }
     }
 }

@@ -23,6 +23,7 @@ import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -153,7 +154,11 @@ public class RocksDBStreamTransferTest extends RocksDBStreamTestBase
         Token minToken = RocksDBUtils.getMinToken(partitioner);
         Token maxToken = RocksDBUtils.getMaxToken(partitioner);
         Token midToken = partitioner.midpoint(minToken, maxToken);
+        Token p75Token = partitioner.midpoint(midToken, maxToken);
+
+        // add two discontinuous subranges
         ranges.add(new Range<Token>(minToken, midToken));
+        ranges.add(new Range<Token>(p75Token, maxToken));
 
         // Use customized outgoing message serializer so that table one is streamed to table two.
         streamRanges(outCfs, inCfs, ranges);
@@ -262,7 +267,6 @@ public class RocksDBStreamTransferTest extends RocksDBStreamTestBase
         Field field = StreamMessage.Type.ROCKSFILE.getClass().getDeclaredField("outSerializer");
         try
         {
-
             field.setAccessible(true);
             field.set(StreamMessage.Type.ROCKSFILE, new CustomRocksDBOutgoingMessageSerializer(RocksDBEngine.getRocksDBCF(outCfs.metadata.cfId)));
             transferRanges(inCfs, ranges);
@@ -329,7 +333,7 @@ public class RocksDBStreamTransferTest extends RocksDBStreamTestBase
             try
             {
                 RocksDBMessageHeader.SERIALIZER.seriliaze(message.header, out);
-                RocksDBStreamWriter writer = new RocksDBStreamWriter(alternativeDBToStreamFrom, message.ranges, session, 0);
+                RocksDBStreamWriter writer = new RocksDBStreamWriter(alternativeDBToStreamFrom, message.range, session, 0);
                 LZFOutputStream stream = new LZFOutputStream(out);
                 writer.write(stream);
                 stream.flush();

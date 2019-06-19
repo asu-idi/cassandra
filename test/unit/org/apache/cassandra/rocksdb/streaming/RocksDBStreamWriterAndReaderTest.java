@@ -54,9 +54,8 @@ public class RocksDBStreamWriterAndReaderTest extends RocksDBStreamTestBase
 
         // Write Rocksdb entries into stream.
         RocksDBStreamWriter writer = new RocksDBStreamWriter(RocksDBEngine.getRocksDBCF(cfs.metadata.cfId),
-                                                             Arrays.asList(
                                                                           new Range(RocksDBUtils.getMinToken(tokenPartioner),
-                                                                                    RocksDBUtils.getMaxToken(tokenPartioner))),
+                                                                                    RocksDBUtils.getMaxToken(tokenPartioner)),
                                                              createDummySession(), 0);
         DataOutputBuffer out = new DataOutputBuffer(BUFFER_SIZE);
         writer.write(out);

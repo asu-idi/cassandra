@@ -446,9 +446,8 @@ public class RocksDBCF implements RocksDBCFMBean
     @Override
     public String exportRocksDBStream(String outputFile, int limit) throws IOException, RocksDBException
     {
-        Collection<Range<Token>> ranges = Arrays.asList(new Range<Token>(RocksDBUtils.getMinToken(cfs.getPartitioner()),
-                                                                         RocksDBUtils.getMaxToken(cfs.getPartitioner())));
-        RocksDBStreamWriter writer = new RocksDBStreamWriter(RocksDBEngine.getRocksDBCF(cfs.metadata.cfId), ranges);
+        RocksDBStreamWriter writer = new RocksDBStreamWriter(RocksDBEngine.getRocksDBCF(cfs.metadata.cfId), new Range<Token>(RocksDBUtils.getMinToken(cfs.getPartitioner()),
+                                                                                                                             RocksDBUtils.getMaxToken(cfs.getPartitioner())));
         BufferedDataOutputStreamPlus out = new BufferedDataOutputStreamPlus(new FileOutputStream(outputFile));
         long startTimeMs = System.currentTimeMillis();
         writer.write(out, limit);

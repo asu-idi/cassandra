@@ -159,40 +159,31 @@ public class RocksDBStreamUtils
         return sb.toString();
     }
 
-    public static double getRangeSpaceSize(Collection<Range<Token>> normalizedRanges)
+    public static double getRangeSpaceSize(Range<Token> range)
     {
-        if (normalizedRanges.isEmpty())
+        if (range == null)
             return 0;
 
-        IPartitioner partitioner = normalizedRanges.iterator().next().left.getPartitioner();
+        IPartitioner partitioner = range.left.getPartitioner();
 
         if (partitioner instanceof Murmur3Partitioner)
         {
-            double rangesSize = 0;
-            for (Range<Token> r : normalizedRanges)
-            {
-                rangesSize += r.left.size(r.right);
-            }
-            return rangesSize;
+            return range.left.size(range.right);
         }
 
         if (partitioner instanceof RandomPartitioner)
         {
             BigInteger fullTokenSpaceSize = RandomPartitioner.MAXIMUM;
-            BigInteger rangesSize = BigInteger.ZERO;
-            for (Range<Token> r : normalizedRanges)
-            {
-                RandomPartitioner.BigIntegerToken left = (RandomPartitioner.BigIntegerToken) r.left;
-                RandomPartitioner.BigIntegerToken right = (RandomPartitioner.BigIntegerToken) r.right;
-                rangesSize = rangesSize.add(right.getTokenValue()).add(left.getTokenValue().negate());
-            }
+            RandomPartitioner.BigIntegerToken left = (RandomPartitioner.BigIntegerToken) range.left;
+            RandomPartitioner.BigIntegerToken right = (RandomPartitioner.BigIntegerToken) range.right;
+            BigInteger rangesSize = right.getTokenValue().subtract(left.getTokenValue());
             return rangesSize.doubleValue() / fullTokenSpaceSize.doubleValue();
         }
 
         throw new NotImplementedException(partitioner.getClass().getName() + "is not supported");
     }
 
-    public static long estimateDataSize(RocksDBCF rocksDBCF, Collection<Range<Token>> normalizedRange)
+    public static long estimateDataSize(RocksDBCF rocksDBCF, Range<Token> normalizedRange)
     {
         try
         {
@@ -205,7 +196,7 @@ public class RocksDBStreamUtils
         }
     }
 
-    public static long estimateNumKeys(RocksDBCF rocksDBCF, Collection<Range<Token>> normalizedRange)
+    public static long estimateNumKeys(RocksDBCF rocksDBCF, Range<Token> normalizedRange)
     {
         try
         {

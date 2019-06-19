@@ -20,7 +20,6 @@ package org.apache.cassandra.rocksdb.streaming;
 
 import java.io.IOException;
 import java.nio.channels.ReadableByteChannel;
-import java.util.Collection;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -65,7 +64,7 @@ public class RocksDBOutgoingMessage extends OutgoingMessage
     {
         RocksDBMessageHeader.SERIALIZER.seriliaze(header, out);
         LZFOutputStream lzfOutputStream = new LZFOutputStream(out);
-        RocksDBStreamWriter writer = new RocksDBStreamWriter(rocksDBCF, ranges, session, header.estimatedKeys);
+        RocksDBStreamWriter writer = new RocksDBStreamWriter(rocksDBCF, range, session, header.estimatedKeys);
         writer.write(lzfOutputStream);
         lzfOutputStream.flush();
         return writer.getOutgoingBytes();
@@ -75,19 +74,19 @@ public class RocksDBOutgoingMessage extends OutgoingMessage
     public final UUID cfId;
     public final int sequenceNumber;
     private final RocksDBCF rocksDBCF;
-    public final Collection<Range<Token>>  ranges;
+    public final Range<Token> range;
     private boolean completed = false;
     public boolean transferring = false;
 
-    public RocksDBOutgoingMessage(UUID cfId, int sequenceNumber, RocksDBCF rocksDBCF, Collection<Range<Token>> ranges)
+    public RocksDBOutgoingMessage(UUID cfId, int sequenceNumber, RocksDBCF rocksDBCF, Range<Token> range)
     {
         super(Type.ROCKSFILE);
         this.cfId = cfId;
         this.sequenceNumber = sequenceNumber;
         this.rocksDBCF = rocksDBCF;
-        this.ranges = ranges;
-        this.header = new RocksDBMessageHeader(cfId, sequenceNumber, RocksDBStreamUtils.estimateDataSize(rocksDBCF, ranges),
-                                               RocksDBStreamUtils.estimateNumKeys(rocksDBCF, ranges));
+        this.range = range;
+        this.header = new RocksDBMessageHeader(cfId, sequenceNumber, RocksDBStreamUtils.estimateDataSize(rocksDBCF, range),
+                                               RocksDBStreamUtils.estimateNumKeys(rocksDBCF, range));
     }
 
     public synchronized void startTransfer()
