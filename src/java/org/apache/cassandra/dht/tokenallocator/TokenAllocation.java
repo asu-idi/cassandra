@@ -199,6 +199,7 @@ public class TokenAllocation
     {
         final String dc = snitch.getDatacenter(endpoint);
         final int replicas = rs.getReplicationFactor(dc);
+        logger.info("Token allocation is based on NetworkTopologyStrategy with DC: {}, replica num: {}", dc, replicas);
 
         if (replicas == 0 || replicas == 1)
         {
