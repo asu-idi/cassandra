@@ -47,6 +47,7 @@ import com.codahale.metrics.jvm.FileDescriptorRatioGauge;
 import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
 import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import org.slf4j.Logger;
@@ -60,6 +61,7 @@ import org.apache.cassandra.config.Schema;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
 import org.apache.cassandra.db.commitlog.CommitLog;
+import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.StartupException;
 import org.apache.cassandra.gms.Gossiper;
@@ -268,7 +270,8 @@ public class CassandraDaemon
         LegacySchemaMigrator.migrate();
 
         // Populate token metadata before flushing, for token-aware sstable partitioning (#6696)
-        StorageService.instance.populateTokenMetadata();
+        Multimap<InetAddress, Token> loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        StorageService.instance.populateTokenMetadata(loadedTokens);
 
         // load schema from disk
         Schema.instance.loadFromDisk();
@@ -333,7 +336,8 @@ public class CassandraDaemon
         }
 
         // Re-populate token metadata after commit log recover (new peers might be loaded onto system keyspace #10293)
-        StorageService.instance.populateTokenMetadata();
+        loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        StorageService.instance.populateTokenMetadata(loadedTokens);
 
         // migrate any legacy (pre-3.0) hints from system.hints table into the new store
         new LegacyHintsMigrator(DatabaseDescriptor.getHintsDirectory(), DatabaseDescriptor.getMaxHintsFileSize()).migrate();

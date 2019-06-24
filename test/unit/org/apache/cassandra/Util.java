@@ -39,6 +39,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.concurrent.SEPExecutor;
+import org.apache.cassandra.concurrent.Stage;
+import org.apache.cassandra.concurrent.StageManager;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -653,5 +656,14 @@ public class Util
             // Expected -- marked all directories as unwritable
         }
         return () -> BlacklistedDirectories.clearUnwritableUnsafe();
+    }
+
+    public static void waitStageTask(Stage stage) throws InterruptedException
+    {
+        while (!(((SEPExecutor) StageManager.getStage(stage)).getPendingTasks() == 0
+                 && ((SEPExecutor) StageManager.getStage(stage)).getActiveCount() == 0))
+        {
+            Thread.sleep(1);
+        }
     }
 }

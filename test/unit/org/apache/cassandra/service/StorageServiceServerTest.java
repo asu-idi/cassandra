@@ -28,6 +28,7 @@ import java.util.*;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.SetMultimap;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -54,6 +55,7 @@ import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -583,5 +585,79 @@ public class StorageServiceServerTest
 
         repairRangeFrom = StorageService.instance.createRepairRangeFrom("2000", "2000");
         assert repairRangeFrom.size() == 0;
+    }
+
+    @Test
+    public void testCheckAndRemoveConflictTokens() throws Exception
+    {
+        InetAddress ep1 = InetAddress.getByName("127.0.0.1");
+        InetAddress ep2 = InetAddress.getByName("127.0.0.2");
+        InetAddress ep3 = InetAddress.getByName("127.0.0.3");
+
+        List<Token> tokens = new ArrayList<>();
+        for (int i = 0; i < 10; i++)
+            tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        // Empty token map
+        SetMultimap<InetAddress, Token> tokenMap = HashMultimap.create();
+        assertFalse(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 0);
+
+        // single token, no conflict
+        tokenMap.put(ep1, tokens.get(1));
+        tokenMap.put(ep2, tokens.get(2));
+        tokenMap.put(ep3, tokens.get(3));
+        assertFalse(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 3);
+
+        // single token, with conflict
+        tokenMap = HashMultimap.create();
+        tokenMap.put(ep1, tokens.get(1));
+        tokenMap.put(ep2, tokens.get(2));
+        tokenMap.put(ep3, tokens.get(1));
+        assertTrue(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 1);
+        assertTrue(tokenMap.keySet().contains(ep2));
+        assertFalse(tokenMap.keySet().contains(ep1));
+        assertFalse(tokenMap.keySet().contains(ep3));
+
+        // multiple tokens (vnode), no conflict
+        tokenMap = HashMultimap.create();
+        tokenMap.put(ep1, tokens.get(1));
+        tokenMap.put(ep1, tokens.get(2));
+        tokenMap.put(ep2, tokens.get(3));
+        tokenMap.put(ep2, tokens.get(4));
+        tokenMap.put(ep3, tokens.get(5));
+        tokenMap.put(ep3, tokens.get(6));
+        assertFalse(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 6);
+
+        // multipe tokens (vnode), with conflict
+        tokenMap = HashMultimap.create();
+        tokenMap.put(ep1, tokens.get(1));
+        tokenMap.put(ep1, tokens.get(2));
+        tokenMap.put(ep2, tokens.get(3));
+        tokenMap.put(ep2, tokens.get(4));
+        tokenMap.put(ep3, tokens.get(1));
+        tokenMap.put(ep3, tokens.get(2));
+        assertTrue(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 2);
+        assertTrue(tokenMap.keySet().contains(ep2));
+        assertFalse(tokenMap.keySet().contains(ep1));
+        assertFalse(tokenMap.keySet().contains(ep3));
+
+        // multipe tokens (vnode), with partitial conflict (remove both)
+        tokenMap = HashMultimap.create();
+        tokenMap.put(ep1, tokens.get(1));
+        tokenMap.put(ep1, tokens.get(2));
+        tokenMap.put(ep2, tokens.get(3));
+        tokenMap.put(ep2, tokens.get(4));
+        tokenMap.put(ep3, tokens.get(5));
+        tokenMap.put(ep3, tokens.get(1));
+        assertTrue(StorageService.instance.checkAndRemoveConflictTokens(tokenMap));
+        assertTrue(tokenMap.size() == 2);
+        assertTrue(tokenMap.keySet().contains(ep2));
+        assertFalse(tokenMap.keySet().contains(ep1));
+        assertFalse(tokenMap.keySet().contains(ep3));
     }
 }

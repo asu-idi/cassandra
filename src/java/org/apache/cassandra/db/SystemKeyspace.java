@@ -762,6 +762,16 @@ public final class SystemKeyspace
         forceBlockingFlush(PEERS);
     }
 
+    public static void removeEndpoints(Collection<InetAddress> endpoints)
+    {
+        String req = "DELETE FROM system.%s WHERE peer = ?";
+        for (InetAddress ep : endpoints)
+        {
+            executeInternal(String.format(req, PEERS), ep);
+        }
+        forceBlockingFlush(PEERS);
+    }
+
     /**
      * This method is used to update the System Keyspace with the new tokens for this node
     */
@@ -785,12 +795,26 @@ public final class SystemKeyspace
      */
     public static SetMultimap<InetAddress, Token> loadTokens()
     {
+        return loadTokens(null);
+    }
+
+    /**
+     * Load stored tokens from system table
+     *
+     * if noTokensEndpoints is provided, it will contain the invalid endpoints without token.
+     * @param noTokenEndpoints to return endpoints without token
+     * @return a map of stored tokens to IP addresses
+     */
+    public static SetMultimap<InetAddress, Token> loadTokens(Set<InetAddress> noTokenEndpoints)
+    {
         SetMultimap<InetAddress, Token> tokenMap = HashMultimap.create();
         for (UntypedResultSet.Row row : executeInternal("SELECT peer, tokens FROM system." + PEERS))
         {
             InetAddress peer = row.getInetAddress("peer");
             if (row.has("tokens"))
                 tokenMap.putAll(peer, deserializeTokens(row.getSet("tokens", UTF8Type.instance)));
+            else if (noTokenEndpoints != null)
+                noTokenEndpoints.add(peer);
         }
 
         return tokenMap;

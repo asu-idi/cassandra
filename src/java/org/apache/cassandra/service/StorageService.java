@@ -554,17 +554,72 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             MessagingService.instance().listen();
     }
 
-    public void populateTokenMetadata()
+    /**
+     * Check and remove conflict tokens from system table. The token conflict might be because a replaced node failed to
+     * be removed in system table. This function removes both endpoints during token population. We will have Gossip to
+     * send us the right one and re-insert it back.
+     *
+     * @param tokens
+     * @return if the tokens is updated
+     */
+    @VisibleForTesting
+    boolean checkAndRemoveConflictTokens(Multimap<InetAddress, Token> tokens)
+    {
+        boolean isUpdated = false;
+
+        Multimap<Token, InetAddress> tokenEndpoints = HashMultimap.create();
+        tokens.entries().forEach(t -> tokenEndpoints.put(t.getValue(), t.getKey()));
+
+        Collection<InetAddress> conflictEndpoints = new HashSet<>();
+        for (Token token : tokenEndpoints.keySet())
+        {
+            Collection endpoints = tokenEndpoints.get(token);
+            if (endpoints.size() != 1) // each token should hava one and only one endpoint
+                conflictEndpoints.addAll(endpoints);
+        }
+
+        if (!conflictEndpoints.isEmpty())
+        {
+            isUpdated = true;
+            logger.info("The following endpoints have conflict tokens, removing from the system table: {}", conflictEndpoints.toString());
+            for (InetAddress ep : conflictEndpoints)
+                tokens.removeAll(ep);
+            SystemKeyspace.removeEndpoints(conflictEndpoints);
+        }
+        return isUpdated;
+    }
+
+    /**
+     * Read Saved tokens from System table and cleanup the invalid endpoints:
+     *   1. without owning any token
+     *   2. with conflict tokens
+     * @return Saved tokens
+     */
+    public Multimap<InetAddress, Token> readAndCleanupSavedTokens()
+    {
+        Set<InetAddress> noTokenEndpoints = new HashSet<>();
+        Multimap<InetAddress, Token> loadedTokens = SystemKeyspace.loadTokens(noTokenEndpoints);
+
+        if (!noTokenEndpoints.isEmpty())
+        {
+            logger.info("The following endpoints do not own any token, removing from the system table: {}", noTokenEndpoints.toString());
+            SystemKeyspace.removeEndpoints(noTokenEndpoints);
+        }
+
+        if (!shouldBootstrap()) // if we have not completed bootstrapping, we should not add ourselves as a normal token
+            loadedTokens.putAll(FBUtilities.getBroadcastAddress(), SystemKeyspace.getSavedTokens());
+
+        checkAndRemoveConflictTokens(loadedTokens);
+
+        return loadedTokens;
+    }
+
+    public void populateTokenMetadata(Multimap<InetAddress, Token> loadedTokens)
     {
         if (Boolean.parseBoolean(System.getProperty("cassandra.load_ring_state", "true")))
         {
             logger.info("Populating token metadata from system tables");
-            Multimap<InetAddress, Token> loadedTokens = SystemKeyspace.loadTokens();
-            if (!shouldBootstrap()) // if we have not completed bootstrapping, we should not add ourselves as a normal token
-                loadedTokens.putAll(FBUtilities.getBroadcastAddress(), SystemKeyspace.getSavedTokens());
-
             tokenMetadata.updateNormalTokens(loadedTokens);
-
             logger.info("Token metadata: {}", tokenMetadata);
         }
     }

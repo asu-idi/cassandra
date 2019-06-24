@@ -19,14 +19,24 @@
 package org.apache.cassandra.service;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.Multimap;
+import org.apache.commons.collections.CollectionUtils;
+import org.junit.After;
 import org.junit.Test;
 
+import org.apache.cassandra.Util;
+import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.EndpointState;
@@ -35,9 +45,17 @@ import org.apache.cassandra.gms.IEndpointStateChangeSubscriber;
 import org.apache.cassandra.gms.VersionedValue;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class StorageServiceStateChangeTest
 {
+    @After
+    public void after() throws UnknownHostException
+    {
+        cleanSystemTable();
+        Gossiper.instance.unsafeClearStateForTest();
+    }
+
 
     @Test
     public void testRemoveEndpointsNoLonggerOwningTokens() throws Exception
@@ -45,7 +63,6 @@ public class StorageServiceStateChangeTest
         DatabaseDescriptor.setDaemonInitialized();
         VersionedValue.VersionedValueFactory valueFactory =
             new VersionedValue.VersionedValueFactory(DatabaseDescriptor.getPartitioner());
-
         Collection<Token> tokens = new HashSet<>();
         tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
         tokens.add(DatabaseDescriptor.getPartitioner().getRandomToken());
@@ -87,5 +104,84 @@ public class StorageServiceStateChangeTest
         Gossiper.instance.injectApplicationState(ep2, ApplicationState.TOKENS, valueFactory.tokens(tokens));
         StorageService.instance.onChange(ep2, ApplicationState.STATUS, valueFactory.normal(tokens));
         assertEquals(1, removedNum.get());
+    }
+
+    private void cleanSystemTable() throws UnknownHostException
+    {
+        List<InetAddress> allEndpoints = new ArrayList<>();
+        allEndpoints.add(InetAddress.getByName("127.0.0.2"));
+        allEndpoints.add(InetAddress.getByName("127.0.0.3"));
+        allEndpoints.add(InetAddress.getByName("127.0.0.4"));
+        SystemKeyspace.removeEndpoints(allEndpoints);
+    }
+
+    @Test
+    public void testNewNodeInSystemTable() throws Exception
+    {
+        DatabaseDescriptor.setDaemonInitialized();
+        VersionedValue.VersionedValueFactory valueFactory =
+            new VersionedValue.VersionedValueFactory(DatabaseDescriptor.getPartitioner());
+
+        // Initialize a node with 2 tokens
+        Set<Token> tokens1 = new HashSet<>();
+        tokens1.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+        tokens1.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        InetAddress ep1 = InetAddress.getByName("127.0.0.2");
+        Gossiper.instance.initializeNodeUnsafe(ep1, UUID.randomUUID(), 1);
+        Gossiper.instance.injectApplicationState(ep1, ApplicationState.TOKENS, valueFactory.tokens(tokens1));
+        StorageService.instance.onChange(ep1, ApplicationState.STATUS, valueFactory.normal(tokens1));
+        Util.waitStageTask(Stage.MUTATION);
+
+        // Verify the tokens are stored in system table
+        Multimap<InetAddress, Token> savedTokens = SystemKeyspace.loadTokens();
+        assertEquals(2, savedTokens.size());
+        assertTrue(CollectionUtils.isEqualCollection(tokens1, savedTokens.get(ep1)));
+        Multimap<InetAddress, Token> loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        assertTrue(loadedTokens.equals(savedTokens));
+
+        // Add a new normal node
+        Set<Token> tokens2 = new HashSet<>();
+        tokens2.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+        tokens2.add(DatabaseDescriptor.getPartitioner().getRandomToken());
+
+        InetAddress ep2 = InetAddress.getByName("127.0.0.3");
+        Gossiper.instance.initializeNodeUnsafe(ep2, UUID.randomUUID(), 1);
+        Gossiper.instance.injectApplicationState(ep2, ApplicationState.TOKENS, valueFactory.tokens(tokens2));
+        StorageService.instance.onChange(ep2, ApplicationState.STATUS, valueFactory.normal(tokens2));
+        Util.waitStageTask(Stage.MUTATION);
+
+        // Verify the new tokens are added in system table
+        savedTokens = SystemKeyspace.loadTokens();
+        assertEquals(4, savedTokens.size());
+        assertTrue(CollectionUtils.isEqualCollection(tokens1, savedTokens.get(ep1)));
+        assertTrue(CollectionUtils.isEqualCollection(tokens2, savedTokens.get(ep2)));
+        loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        assertTrue(loadedTokens.equals(savedTokens));
+
+        // Add a node with conflict tokens
+        Set<Token> tokens3 = new HashSet<>();
+        tokens3.add(tokens1.iterator().next());
+        InetAddress ep3 = InetAddress.getByName("127.0.0.4");
+        Gossiper.instance.initializeNodeUnsafe(ep3, UUID.randomUUID(), 2);
+        Gossiper.instance.injectApplicationState(ep3, ApplicationState.TOKENS, valueFactory.tokens(tokens3));
+        StorageService.instance.onChange(ep3, ApplicationState.STATUS, valueFactory.normal(tokens3));
+        Util.waitStageTask(Stage.MUTATION);
+
+        // Verify the endpoints with conflict tokens are removed, and then added back with gossip state onChange()
+        savedTokens = SystemKeyspace.loadTokens();
+        assertEquals(5, savedTokens.size());
+        assertTrue(CollectionUtils.isEqualCollection(tokens2, savedTokens.get(ep2)));
+        loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        assertEquals(2, loadedTokens.size());
+        assertTrue(CollectionUtils.isEqualCollection(tokens2, loadedTokens.get(ep2)));
+
+        // Gossiper insert the missing endpoint back
+        Gossiper.instance.initializeNodeUnsafe(ep3, UUID.randomUUID(), 2);
+        Gossiper.instance.injectApplicationState(ep3, ApplicationState.TOKENS, valueFactory.tokens(tokens3));
+        StorageService.instance.onChange(ep3, ApplicationState.STATUS, valueFactory.normal(tokens3));
+        Util.waitStageTask(Stage.MUTATION);
+        loadedTokens = StorageService.instance.readAndCleanupSavedTokens();
+        assertEquals(3, loadedTokens.size());
     }
 }

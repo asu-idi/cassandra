@@ -36,7 +36,6 @@ import com.google.common.util.concurrent.Uninterruptibles;
 
 import com.codahale.metrics.RatioGauge;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
-import org.apache.cassandra.config.Config;
 import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1747,6 +1746,12 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
 
         totalPolls += numPolls;
         return totalPolls;
+    }
+
+    @VisibleForTesting
+    public void unsafeClearStateForTest()
+    {
+        endpointStateMap.clear();
     }
 
 }
