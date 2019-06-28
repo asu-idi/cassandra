@@ -295,6 +295,17 @@ public abstract class AbstractReplicationStrategy
         return getAddressReplicas(tokenMetadata.cloneOnlyTokenMap(), endpoint);
     }
 
+    public RangesAtEndpoint getAddressReplicasForTestOnly(TokenMetadata metadata, InetAddressAndPort endpoint)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public RangesAtEndpoint getAddressReplicasForTestOnly(InetAddressAndPort endpoint)
+    {
+        return getAddressReplicasForTestOnly(tokenMetadata.cloneOnlyTokenMap(), endpoint);
+    }
+
+
     public RangesAtEndpoint getPendingAddressRanges(TokenMetadata metadata, Token pendingToken, InetAddressAndPort pendingAddress)
     {
         return getPendingAddressRanges(metadata, Collections.singleton(pendingToken), pendingAddress);

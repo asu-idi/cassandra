@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
@@ -29,6 +30,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -38,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.Util;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner.LongToken;
 import org.apache.cassandra.dht.OrderPreservingPartitioner.StringToken;
@@ -47,19 +50,46 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.TokenMetadata.Topology;
 import org.apache.cassandra.service.StorageService;
 
+import static java.util.stream.Collectors.toList;
 import static org.apache.cassandra.locator.Replica.fullReplica;
 import static org.apache.cassandra.locator.Replica.transientReplica;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class NetworkTopologyStrategyTest
 {
-    private String keyspaceName = "Keyspace1";
+    private static String keyspaceName = "Keyspace1";
     private static final Logger logger = LoggerFactory.getLogger(NetworkTopologyStrategyTest.class);
+
+    private static final IPartitioner partitioner = Murmur3Partitioner.instance;
+    private static Util.PartitionerSwitcher partitionerSwitcher;
+
+    public static int MAX_TEST_HOST_NUM = 2000;
+    static List<InetAddressAndPort> hostList = IntStream.range(0, MAX_TEST_HOST_NUM).mapToObj(i -> {
+        try
+        {
+            return InetAddressAndPort.getByName(String.format("127.0.%d.%d", i / 200, (i % 200) + 1));
+        }
+        catch (UnknownHostException e)
+        {
+            return null;
+        }
+    }).collect(toList());
 
     @BeforeClass
     public static void setupDD()
     {
         DatabaseDescriptor.daemonInitialization();
         DatabaseDescriptor.setTransientReplicationEnabledUnsafe(true);
+        partitionerSwitcher = Util.switchPartitioner(partitioner);
+    }
+
+    @AfterClass
+    public static void tearDown()
+    {
+        partitionerSwitcher.close();
     }
 
     @Test
@@ -185,6 +215,208 @@ public class NetworkTopologyStrategyTest
         Token token1 = new StringToken(token);
         InetAddressAndPort add1 = InetAddressAndPort.getByAddress(bytes);
         metadata.updateNormalToken(token1, add1);
+    }
+
+    public static class HostInfo
+    {
+        public InetAddressAndPort ep;
+        public String dc;
+        public String rack;
+        public List<Token> tokens;
+
+        public HostInfo(InetAddressAndPort ep, String dc, String rack, List<Long> tokens)
+        {
+            this.ep = ep;
+            this.dc = dc;
+            this.rack = rack;
+            this.tokens = tokens.stream().map(l -> new Murmur3Partitioner.LongToken(l)).collect(toList());
+        }
+
+        public HostInfo(int index, String dc, String rack, int vNode)
+        {
+            this.ep = hostList.get(index);
+            this.dc = dc;
+            this.rack = rack;
+            this.tokens = IntStream.range(0, vNode).mapToObj(i -> DatabaseDescriptor.getPartitioner().getRandomToken()).collect(toList());
+        }
+
+        public HostInfo(int index, String dc, String rack, List<Long> tokens)
+        {
+            this.ep = hostList.get(index);
+            this.dc = dc;
+            this.rack = rack;
+            this.tokens = tokens.stream().map(l -> new Murmur3Partitioner.LongToken(l)).collect(toList());
+        }
+    }
+
+    public static NetworkTopologyStrategy verifyEndpointRanges(Map<InetAddressAndPort, HostInfo> hosts, int rf)
+    {
+        return verifyEndpointRanges(hosts, rf, new TokenMetadata());
+    }
+
+    public static NetworkTopologyStrategy verifyEndpointRanges(Map<InetAddressAndPort, HostInfo> hosts, int rf, TokenMetadata metadata)
+    {
+        IEndpointSnitch snitch = new AbstractEndpointSnitch()
+        {
+            public String getRack(InetAddressAndPort endpoint)
+            {
+                return hosts.get(endpoint).rack;
+            }
+
+            public String getDatacenter(InetAddressAndPort endpoint)
+            {
+                return hosts.get(endpoint).dc;
+            }
+
+            public int compareEndpoints(InetAddressAndPort target, Replica a1, Replica a2)
+            {
+                return 0;
+            }
+        };
+
+        DatabaseDescriptor.setEndpointSnitch(snitch);
+
+        hosts.values().stream().forEach(t -> metadata.updateNormalTokens(t.tokens, t.ep));
+
+        Map<String, String> configOptions = IntStream.range(0, 8).mapToObj(i -> String.format("dc%d", i))
+                                                     .collect(Collectors.toMap(x -> x, x -> String.valueOf(rf)));
+
+        NetworkTopologyStrategy strategy = new NetworkTopologyStrategy(keyspaceName, metadata, snitch, configOptions);
+
+        RangesByEndpoint endpointToRanges = strategy.getAddressReplicas(metadata);
+
+        for (InetAddressAndPort ep : hosts.keySet())
+        {
+            RangesAtEndpoint r1 = endpointToRanges.get(ep);
+            RangesAtEndpoint r2 = strategy.getAddressReplicas(metadata, ep);
+            assertThat(r2.ranges(), is(r1.ranges()));
+        }
+
+        return strategy;
+    }
+
+    @Test
+    public void testGetAddressRanges()
+    {
+        Map<InetAddressAndPort, HostInfo> hosts = new HashMap<>();
+        InetAddressAndPort ep1 = hostList.get(0);
+        InetAddressAndPort ep2 = hostList.get(1);
+        InetAddressAndPort ep3 = hostList.get(2);
+        hosts.put(ep1, new HostInfo(ep1, "dc1", "r1", Arrays.asList(1l)));
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+
+        hosts.put(ep1, new HostInfo(ep1, "dc1", "r1", Arrays.asList(1l, 10l)));
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+
+        hosts.put(ep2, new HostInfo(ep2, "dc1", "r1", Arrays.asList(2l, 3l)));
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+
+        hosts.put(ep3, new HostInfo(ep3, "dc1", "r2", Arrays.asList(4l, 11l)));
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+    }
+
+    @Test
+    public void testGetEndpointRangesVnode()
+    {
+        Map<InetAddressAndPort, HostInfo> hosts = new HashMap<>();
+        for (int i = 0; i < 5; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r1", 256));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 5; i < 10; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r2", 256));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 10; i < 15; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc2", "r3", 256));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 15; i < 20; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r2", 256));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+    }
+
+    @Test
+    public void testGetEndpointRangesNoneVnode()
+    {
+        Map<InetAddressAndPort, HostInfo> hosts = new HashMap<>();
+        for (int i = 0; i < 5; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r1", 1));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 5; i < 10; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r2", 1));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 10; i < 15; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc2", "r3", 1));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
+        for (int i = 15; i < 20; i++)
+        {
+            hosts.put(hostList.get(i), new HostInfo(i, "dc1", "r2", 1));
+        }
+        verifyEndpointRanges(hosts, 0);
+        verifyEndpointRanges(hosts, 1);
+        verifyEndpointRanges(hosts, 2);
+        verifyEndpointRanges(hosts, 3);
+        verifyEndpointRanges(hosts, 4);
+        verifyEndpointRanges(hosts, 5);
     }
 
     @Test
@@ -430,5 +662,184 @@ public class NetworkTopologyStrategyTest
                                                fullReplica(endpoints.get(2), range(100, 200)),
                                                transientReplica(endpoints.get(3), range(100, 200))),
                             strategy.getNaturalReplicasForToken(tk(101)));
+    }
+
+
+    private NetworkTopologyStrategy buildTestStrategy(TokenMetadata metadata, Map<InetAddressAndPort, HostInfo> hosts, Map<String, String> configOptions)
+    {
+        IEndpointSnitch snitch = new AbstractEndpointSnitch()
+        {
+            public String getRack(InetAddressAndPort endpoint)
+            {
+                return hosts.get(endpoint).rack;
+            }
+
+            public String getDatacenter(InetAddressAndPort endpoint)
+            {
+                return hosts.get(endpoint).dc;
+            }
+
+            public int compareEndpoints(InetAddressAndPort target, Replica r1, Replica r2)
+            {
+                return 0;
+            }
+        };
+
+        DatabaseDescriptor.setEndpointSnitch(snitch);
+
+        hosts.values().stream().forEach(t -> metadata.updateNormalTokens(t.tokens, t.ep));
+
+        return new NetworkTopologyStrategy(keyspaceName, metadata, snitch, configOptions);
+    }
+
+    private void compareDCIterators(Iterator<NetworkTopologyStrategy.DCAwareTokens> expected, Iterator<NetworkTopologyStrategy.DCAwareTokens> actual)
+    {
+        while (expected.hasNext() && actual.hasNext())
+        {
+            NetworkTopologyStrategy.DCAwareTokens dt1 = expected.next();
+            NetworkTopologyStrategy.DCAwareTokens dt2 = actual.next();
+            assertTrue(dt1.getTokens().equals(dt2.getTokens()));
+        }
+        assertFalse(expected.hasNext());
+        assertFalse(actual.hasNext());
+    }
+
+    private NetworkTopologyStrategy.DCAwareTokens buildDCToken(List<Long> tokens)
+    {
+        NetworkTopologyStrategy.DCAwareTokens ret = new NetworkTopologyStrategy.DCAwareTokens();
+        for (Long l : tokens)
+        {
+            ret.add(new Murmur3Partitioner.LongToken(l));
+        }
+        return ret;
+    }
+
+    @Test
+    public void testDCIterator()
+    {
+        final String TEST_DC = "dc1";
+        Map<String, String> configOptions = new HashMap<>();
+        configOptions.put(TEST_DC, "1");
+
+        // single node, single token
+        Map<InetAddressAndPort, HostInfo> hosts = new HashMap<>();
+        int idx = 0;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(1l)));
+
+        TokenMetadata metadata = new TokenMetadata();
+        NetworkTopologyStrategy strategy = buildTestStrategy(metadata, hosts, configOptions);
+
+        Token first = metadata.sortedTokens().get(0);
+        Token end = metadata.sortedTokens().get(0);
+        Iterator<NetworkTopologyStrategy.DCAwareTokens> iter = strategy.dcRingReverseIterator(metadata, first, end, TEST_DC);
+
+        List<NetworkTopologyStrategy.DCAwareTokens> expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(1l, 1l)));
+        Iterator<NetworkTopologyStrategy.DCAwareTokens> expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // single node, multiple tokens
+        hosts = new HashMap<>();
+        idx = 0;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(1l, 3l, 5l)));
+
+        metadata = new TokenMetadata();
+        strategy = buildTestStrategy(metadata, hosts, configOptions);
+
+        first = metadata.sortedTokens().get(0);
+        end = metadata.sortedTokens().get(0);
+        iter = strategy.dcRingReverseIterator(metadata, first, end, "dc1");
+
+        expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(1l, 5l, 3l, 1l)));
+        expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // search from middle
+        first = metadata.sortedTokens().get(1);
+        end = metadata.sortedTokens().get(2);
+        iter = strategy.dcRingReverseIterator(metadata, first, end, "dc1");
+
+        expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(3l, 1l, 5l)));
+        expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // 2 nodes, single token
+        hosts = new HashMap<>();
+        idx = 0;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(1l)));
+        idx++;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(2l)));
+
+        metadata = new TokenMetadata();
+        strategy = buildTestStrategy(metadata, hosts, configOptions);
+
+        first = metadata.sortedTokens().get(0);
+        end = metadata.sortedTokens().get(0);
+        iter = strategy.dcRingReverseIterator(metadata, first, end, "dc1");
+
+        expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(1l, 2l)));
+        expected.add(buildDCToken(Arrays.asList(2l, 1l)));
+        expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // 2 nodes, multiple tokens
+        hosts = new HashMap<>();
+        idx = 0;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(1l, 3l, 8l)));
+        idx++;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(2l, 10l, 11l)));
+
+        metadata = new TokenMetadata();
+        strategy = buildTestStrategy(metadata, hosts, configOptions);
+
+        first = metadata.sortedTokens().get(0);
+        end = metadata.sortedTokens().get(0);
+        iter = strategy.dcRingReverseIterator(metadata, first, end, "dc1");
+
+        expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(1l, 11l)));
+        expected.add(buildDCToken(Arrays.asList(11l, 10l, 8l)));
+        expected.add(buildDCToken(Arrays.asList(8l, 3l, 2l)));
+        expected.add(buildDCToken(Arrays.asList(2l, 1l)));
+        expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // 2 nodes + 1 other DC nodes, multiple tokens
+        hosts = new HashMap<>();
+        idx = 0;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(1l, 3l, 8l)));
+        idx++;
+        hosts.put(hostList.get(idx), new HostInfo(idx, TEST_DC, "r1", Arrays.asList(2l, 10l, 11l)));
+        idx++;
+        hosts.put(hostList.get(idx), new HostInfo(idx, "dc2", "r1", Arrays.asList(4l, 6l, 12l)));
+
+        metadata = new TokenMetadata();
+        strategy = buildTestStrategy(metadata, hosts, configOptions);
+
+        first = metadata.sortedTokens().get(0);
+        end = metadata.sortedTokens().get(0);
+        iter = strategy.dcRingReverseIterator(metadata, first, end, "dc1");
+
+        expected = new ArrayList<>();
+        expected.add(buildDCToken(Arrays.asList(1l, 12l, 11l)));
+        expected.add(buildDCToken(Arrays.asList(11l, 10l, 8l)));
+        expected.add(buildDCToken(Arrays.asList(8l, 6l, 4l, 3l, 2l)));
+        expected.add(buildDCToken(Arrays.asList(2l, 1l)));
+        expectedIter = expected.iterator();
+
+        compareDCIterators(expectedIter, iter);
+
+        // Find non-existent token
+        Token nonExistent =  new Murmur3Partitioner.LongToken(7l);
+        iter = strategy.dcRingReverseIterator(metadata, nonExistent, end, "dc1");
+        assertFalse(iter.hasNext());
     }
 }
