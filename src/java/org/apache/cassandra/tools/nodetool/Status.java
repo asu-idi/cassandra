@@ -159,7 +159,7 @@ public class Status extends NodeToolCmd
         else state = "N";
 
         load = loadMap.containsKey(endpoint) ? loadMap.get(endpoint) : "?";
-        strOwns = owns != null && hasEffectiveOwns ? new DecimalFormat("##0.0%").format(owns) : "?";
+        strOwns = owns != null && hasEffectiveOwns ? new DecimalFormat("##0.000%").format(owns) : "?";
         hostID = hostIDMap.get(endpoint);
 
         try
