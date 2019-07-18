@@ -20,6 +20,7 @@
 package org.apache.cassandra.auth;
 
 import java.net.InetAddress;
+import java.net.Socket;
 
 import org.apache.cassandra.exceptions.ConfigurationException;
 
@@ -34,6 +35,17 @@ public interface IInternodeAuthenticator
      * @return true if the connection should be accepted, false otherwise.
      */
     boolean authenticate(InetAddress remoteAddress, int remotePort);
+
+    /**
+     * Decides whether or not a peer is allowed to connect to this node.
+     * If this method returns false, the socket will be immediately closed.
+     *
+     * @param socket socket object for the connecting node
+     * @return true if the connection should be accepted, false otherwise.
+     */
+    default boolean authenticate(Socket socket) {
+        return authenticate(socket.getInetAddress(), socket.getPort());
+    }
 
     /**
      * Validates configuration of IInternodeAuthenticator implementation (if configurable).

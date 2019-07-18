@@ -1176,7 +1176,7 @@ public final class MessagingService implements MessagingServiceMBean
 
         private boolean authenticate()
         {
-            return DatabaseDescriptor.getInternodeAuthenticator().authenticate(socket.getInetAddress(), socket.getPort());
+            return DatabaseDescriptor.getInternodeAuthenticator().authenticate(socket);
         }
     }
 
@@ -1246,11 +1246,6 @@ public final class MessagingService implements MessagingServiceMBean
             {
                 connection.close();
             }
-        }
-
-        private boolean authenticate(Socket socket)
-        {
-            return DatabaseDescriptor.getInternodeAuthenticator().authenticate(socket.getInetAddress(), socket.getPort());
         }
     }
 
