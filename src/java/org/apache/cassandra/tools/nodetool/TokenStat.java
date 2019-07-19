@@ -15,41 +15,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.tools.nodetool;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
-public class SetHostStat implements Iterable<HostStat>
+public class TokenStat
 {
-    final List<HostStat> hostStats = new ArrayList<HostStat>();
-    final boolean resolveIp;
+    public final InetAddress endpoint;
+    public final boolean resolveIp;
+    public final Float owns;
+    public final String token;
 
-    public SetHostStat(boolean resolveIp)
+    public TokenStat(String token, InetAddress endpoint, boolean resolveIp, Float owns)
     {
+        this.token = token;
+        this.endpoint = endpoint;
         this.resolveIp = resolveIp;
+        this.owns = owns;
     }
 
-    public int size()
+    public String ipOrDns()
     {
-        return hostStats.size();
-    }
-
-    @Override
-    public Iterator<HostStat> iterator()
-    {
-        return hostStats.iterator();
-    }
-
-    public void add(Set<String> tokens, String host, Map<InetAddress, Float> ownerships) throws UnknownHostException
-    {
-        InetAddress endpoint = InetAddress.getByName(host);
-        Float owns = ownerships.get(endpoint);
-        hostStats.add(new HostStat(tokens, endpoint, resolveIp, owns));
+        return resolveIp ? endpoint.getHostName() : endpoint.getHostAddress();
     }
 }

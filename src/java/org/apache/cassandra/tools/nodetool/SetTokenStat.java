@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.tools.nodetool;
 
 import java.net.InetAddress;
@@ -23,33 +24,39 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-public class SetHostStat implements Iterable<HostStat>
+public class SetTokenStat implements Iterable<TokenStat>
 {
-    final List<HostStat> hostStats = new ArrayList<HostStat>();
+    final List<TokenStat> tokenStats = new ArrayList<>();
     final boolean resolveIp;
 
-    public SetHostStat(boolean resolveIp)
+    public SetTokenStat(boolean resolveIp)
     {
         this.resolveIp = resolveIp;
     }
 
     public int size()
     {
-        return hostStats.size();
+        return tokenStats.size();
     }
 
     @Override
-    public Iterator<HostStat> iterator()
+    public Iterator<TokenStat> iterator()
     {
-        return hostStats.iterator();
+        return tokenStats.iterator();
     }
 
-    public void add(Set<String> tokens, String host, Map<InetAddress, Float> ownerships) throws UnknownHostException
+    public void add(String token, String host, Map<InetAddress, Float> ownerships) throws UnknownHostException
     {
         InetAddress endpoint = InetAddress.getByName(host);
         Float owns = ownerships.get(endpoint);
-        hostStats.add(new HostStat(tokens, endpoint, resolveIp, owns));
+        tokenStats.add(new TokenStat(token, endpoint, resolveIp, owns));
+    }
+
+    public TokenStat getLast()
+    {
+        if (size() <= 0)
+            return null;
+        return tokenStats.get(tokenStats.size() - 1);
     }
 }

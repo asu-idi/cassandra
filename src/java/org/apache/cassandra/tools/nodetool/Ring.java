@@ -92,10 +92,9 @@ public class Ring extends NodeToolCmd
             return;
         }
 
-
         System.out.println();
-        for (Entry<String, SetHostStat> entry : NodeTool.getOwnershipByDc(probe, resolveIp, tokensToEndpoints, ownerships).entrySet())
-            printDc(probe, format, entry.getKey(), endpointsToTokens, entry.getValue(),showEffectiveOwnership);
+        for (Entry<String, SetTokenStat> entry : NodeTool.getTokensByDc(probe, resolveIp, tokensToEndpoints, ownerships).entrySet())
+            printDc(probe, format, entry.getKey(), endpointsToTokens, entry.getValue(), showEffectiveOwnership);
 
         if (haveVnodes)
         {
@@ -109,7 +108,7 @@ public class Ring extends NodeToolCmd
     private void printDc(NodeProbe probe, String format,
                          String dc,
                          LinkedHashMultimap<String, String> endpointsToTokens,
-                         SetHostStat hoststats,boolean showEffectiveOwnership)
+                         SetTokenStat tokenStats, boolean showEffectiveOwnership)
     {
         Collection<String> liveNodes = probe.getLiveNodes();
         Collection<String> deadNodes = probe.getUnreachableNodes();
@@ -121,24 +120,14 @@ public class Ring extends NodeToolCmd
         System.out.println("Datacenter: " + dc);
         System.out.println("==========");
 
-        // get the total amount of replicas for this dc and the last token in this dc's ring
-        List<String> tokens = new ArrayList<>();
-        String lastToken = "";
-
-        for (HostStat stat : hoststats)
-        {
-            tokens.addAll(endpointsToTokens.get(stat.endpoint.getHostAddress()));
-            lastToken = tokens.get(tokens.size() - 1);
-        }
-
         System.out.printf(format, "Address", "Rack", "Status", "State", "Load", "Owns", "Token");
 
-        if (hoststats.size() > 1)
-            System.out.printf(format, "", "", "", "", "", "", lastToken);
+        if (tokenStats.size() > 1)
+            System.out.printf(format, "", "", "", "", "", "", tokenStats.getLast().token);
         else
             System.out.println();
 
-        for (HostStat stat : hoststats)
+        for (TokenStat stat : tokenStats)
         {
             String endpoint = stat.endpoint.getHostAddress();
             String rack;

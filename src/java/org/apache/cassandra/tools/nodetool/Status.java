@@ -27,6 +27,7 @@ import java.text.DecimalFormat;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 
 import org.apache.cassandra.locator.EndpointSnitchInfoMBean;
@@ -107,20 +108,11 @@ public class Status extends NodeToolCmd
 
             printNodesHeader(hasEffectiveOwns, isTokenPerNode);
 
-            ArrayListMultimap<InetAddress, HostStat> hostToTokens = ArrayListMultimap.create();
-            for (HostStat stat : dc.getValue())
-                hostToTokens.put(stat.endpoint, stat);
-
-            for (InetAddress endpoint : hostToTokens.keySet())
-            {
-                Float owns = ownerships.get(endpoint);
-                List<HostStat> tokens = hostToTokens.get(endpoint);
-                printNode(endpoint.getHostAddress(), owns, tokens, hasEffectiveOwns, isTokenPerNode);
-            }
+            for (HostStat endpoint : dc.getValue())
+                printNode(endpoint, hasEffectiveOwns, isTokenPerNode);
         }
 
         System.out.printf("%n" + errors.toString());
-
     }
 
     private void findMaxAddressLength(Map<String, SetHostStat> dcs)
@@ -146,35 +138,36 @@ public class Status extends NodeToolCmd
             System.out.printf(fmt, "-", "-", "Address", "Load", "Tokens", owns, "Host ID", "Rack");
     }
 
-    private void printNode(String endpoint, Float owns, List<HostStat> tokens, boolean hasEffectiveOwns, boolean isTokenPerNode)
+    private void printNode(HostStat endpoint, boolean hasEffectiveOwns, boolean isTokenPerNode)
     {
         String status, state, load, strOwns, hostID, rack, fmt;
+        String epStr = endpoint.endpoint.getHostAddress();
         fmt = getFormat(hasEffectiveOwns, isTokenPerNode);
-        if (liveNodes.contains(endpoint)) status = "U";
-        else if (unreachableNodes.contains(endpoint)) status = "D";
+        if (liveNodes.contains(epStr)) status = "U";
+        else if (unreachableNodes.contains(epStr)) status = "D";
         else status = "?";
-        if (joiningNodes.contains(endpoint)) state = "J";
-        else if (leavingNodes.contains(endpoint)) state = "L";
-        else if (movingNodes.contains(endpoint)) state = "M";
+        if (joiningNodes.contains(epStr)) state = "J";
+        else if (leavingNodes.contains(epStr)) state = "L";
+        else if (movingNodes.contains(epStr)) state = "M";
         else state = "N";
 
-        load = loadMap.containsKey(endpoint) ? loadMap.get(endpoint) : "?";
-        strOwns = owns != null && hasEffectiveOwns ? new DecimalFormat("##0.000%").format(owns) : "?";
-        hostID = hostIDMap.get(endpoint);
+        load = loadMap.containsKey(epStr) ? loadMap.get(epStr) : "?";
+        strOwns = endpoint.owns != null && hasEffectiveOwns ? new DecimalFormat("##0.000%").format(endpoint.owns) : "?";
+        hostID = hostIDMap.get(epStr);
 
         try
         {
-            rack = epSnitchInfo.getRack(endpoint);
+            rack = epSnitchInfo.getRack(epStr);
         } catch (UnknownHostException e)
         {
             throw new RuntimeException(e);
         }
 
-        String endpointDns = tokens.get(0).ipOrDns();
+        String endpointDns = endpoint.ipOrDns();
         if (isTokenPerNode)
-            System.out.printf(fmt, status, state, endpointDns, load, strOwns, hostID, tokens.get(0).token, rack);
+            System.out.printf(fmt, status, state, endpointDns, load, strOwns, hostID, endpoint.tokens.iterator().next(), rack);
         else
-            System.out.printf(fmt, status, state, endpointDns, load, tokens.size(), strOwns, hostID, rack);
+            System.out.printf(fmt, status, state, endpointDns, load, endpoint.tokens.size(), strOwns, hostID, rack);
     }
 
     private String getFormat(

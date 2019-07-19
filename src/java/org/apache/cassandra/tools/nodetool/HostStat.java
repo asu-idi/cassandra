@@ -18,20 +18,27 @@
 package org.apache.cassandra.tools.nodetool;
 
 import java.net.InetAddress;
+import java.util.Collections;
+import java.util.Set;
 
 public class HostStat
 {
     public final InetAddress endpoint;
     public final boolean resolveIp;
     public final Float owns;
-    public final String token;
+    public final Set<String> tokens;
 
-    public HostStat(String token, InetAddress endpoint, boolean resolveIp, Float owns)
+    public HostStat(Set<String> tokens, InetAddress endpoint, boolean resolveIp, Float owns)
     {
-        this.token = token;
+        this.tokens = tokens;
         this.endpoint = endpoint;
         this.resolveIp = resolveIp;
         this.owns = owns;
+    }
+
+    public HostStat(String token, InetAddress endpoint, boolean resolveIp, Float owns)
+    {
+        this(Collections.singleton(token), endpoint, resolveIp, owns);
     }
 
     public String ipOrDns()

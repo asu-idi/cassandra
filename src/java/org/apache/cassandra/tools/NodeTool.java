@@ -376,20 +376,55 @@ public class NodeTool
     {
         SortedMap<String, SetHostStat> ownershipByDc = Maps.newTreeMap();
         EndpointSnitchInfoMBean epSnitchInfo = probe.getEndpointSnitchInfoProxy();
+
+        Multimap<String, String> endpointToTokens = HashMultimap.create();
+
+        for (Entry<String, String> tokenAndEndPoint : tokenToEndpoint.entrySet())
+        {
+            endpointToTokens.put(tokenAndEndPoint.getValue(), tokenAndEndPoint.getKey());
+        }
+
         try
         {
-            for (Entry<String, String> tokenAndEndPoint : tokenToEndpoint.entrySet())
+            for (String ep : endpointToTokens.keySet())
             {
-                String dc = epSnitchInfo.getDatacenter(tokenAndEndPoint.getValue());
+                String dc = epSnitchInfo.getDatacenter(ep);
                 if (!ownershipByDc.containsKey(dc))
                     ownershipByDc.put(dc, new SetHostStat(resolveIp));
-                ownershipByDc.get(dc).add(tokenAndEndPoint.getKey(), tokenAndEndPoint.getValue(), ownerships);
+                Set<String> tokens = new HashSet<>(endpointToTokens.get(ep));
+                ownershipByDc.get(dc).add(tokens, ep, ownerships);
             }
         }
         catch (UnknownHostException e)
         {
             throw new RuntimeException(e);
         }
+
         return ownershipByDc;
+    }
+
+    public static SortedMap<String, SetTokenStat> getTokensByDc(NodeProbe probe, boolean resolveIp,
+                                                                Map<String, String> tokenToEndpoint,
+                                                                Map<InetAddress, Float> ownerships)
+    {
+        SortedMap<String, SetTokenStat> tokensByDc = Maps.newTreeMap();
+        EndpointSnitchInfoMBean epSnitchInfo = probe.getEndpointSnitchInfoProxy();
+
+        try
+        {
+            for (Entry<String, String> tokenAndEndPoint : tokenToEndpoint.entrySet())
+            {
+                String dc = epSnitchInfo.getDatacenter(tokenAndEndPoint.getValue());
+                if (!tokensByDc.containsKey(dc))
+                    tokensByDc.put(dc, new SetTokenStat(resolveIp));
+                tokensByDc.get(dc).add(tokenAndEndPoint.getKey(), tokenAndEndPoint.getValue(), ownerships);
+            }
+        }
+        catch (UnknownHostException e)
+        {
+            throw new RuntimeException(e);
+        }
+
+        return tokensByDc;
     }
 }
