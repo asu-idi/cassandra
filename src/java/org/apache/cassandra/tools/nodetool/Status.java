@@ -25,6 +25,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.DecimalFormat;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +46,9 @@ public class Status extends NodeToolCmd
 
     @Option(title = "resolve_ip", name = {"-r", "--resolve-ip"}, description = "Show node domain names instead of IPs")
     private boolean resolveIp = false;
+
+    @Option(title = "skip_ownership_calculation", name = {"-s", "--skip-ownership-calculation"}, description = "Skip token ownership calculation")
+    private boolean skipOwnershipCalculation = false;
 
     private boolean isTokenPerNode = true;
     private int maxAddressLength = 0;
@@ -68,22 +72,25 @@ public class Status extends NodeToolCmd
 
         StringBuffer errors = new StringBuffer();
 
-        Map<InetAddress, Float> ownerships = null;
+        Map<InetAddress, Float> ownerships = new HashMap<>();
         boolean hasEffectiveOwns = false;
-        try
+        if (!skipOwnershipCalculation)
         {
-            ownerships = probe.effectiveOwnership(keyspace);
-            hasEffectiveOwns = true;
-        }
-        catch (IllegalStateException e)
-        {
-            ownerships = probe.getOwnership();
-            errors.append("Note: " + e.getMessage() + "%n");
-        }
-        catch (IllegalArgumentException ex)
-        {
-            System.out.printf("%nError: " + ex.getMessage() + "%n");
-            System.exit(1);
+            try
+            {
+                ownerships = probe.effectiveOwnership(keyspace);
+                hasEffectiveOwns = true;
+            }
+            catch (IllegalStateException e)
+            {
+                ownerships = probe.getOwnership();
+                errors.append("Note: " + e.getMessage() + "%n");
+            }
+            catch (IllegalArgumentException ex)
+            {
+                System.out.printf("%nError: " + ex.getMessage() + "%n");
+                System.exit(1);
+            }
         }
 
         SortedMap<String, SetHostStat> dcs = NodeTool.getOwnershipByDc(probe, resolveIp, tokensToEndpoints, ownerships);
