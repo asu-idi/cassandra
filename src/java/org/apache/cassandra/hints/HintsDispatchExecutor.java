@@ -181,7 +181,9 @@ final class HintsDispatchExecutor
     {
         private final HintsStore store;
         private final UUID hostId;
+        private final int nodesCount;
         private final RateLimiter rateLimiter;
+        private int throttleLimit;
 
         DispatchHintsTask(HintsStore store, UUID hostId)
         {
@@ -193,8 +195,10 @@ final class HintsDispatchExecutor
             // the goal is to bound maximum hints traffic going towards a particular node from the rest of the cluster,
             // not total outgoing hints traffic from this node - this is why the rate limiter is not shared between
             // all the dispatch tasks (as there will be at most one dispatch task for a particular host id at a time).
-            int nodesCount = Math.max(1, StorageService.instance.getTokenMetadata().getAllEndpoints().size() - 1);
-            int throttleInKB = DatabaseDescriptor.getHintedHandoffThrottleInKB() / nodesCount;
+            nodesCount = Math.max(1, StorageService.instance.getTokenMetadata().getAllEndpoints().size() - 1);
+            throttleLimit = DatabaseDescriptor.getHintedHandoffThrottleInKB();
+            int throttleInKB = throttleLimit / nodesCount;
+            logger.debug("Creating hinted handoff throttling limit: {} KB for host {}", throttleInKB, hostId);
             this.rateLimiter = RateLimiter.create(throttleInKB == 0 ? Double.MAX_VALUE : throttleInKB * 1024);
         }
 
@@ -220,6 +224,15 @@ final class HintsDispatchExecutor
                 HintsDescriptor descriptor = store.poll();
                 if (descriptor == null)
                     break;
+
+                // Update the throttling limit if it's changed
+                if (throttleLimit != DatabaseDescriptor.getHintedHandoffThrottleInKB())
+                {
+                    throttleLimit = DatabaseDescriptor.getHintedHandoffThrottleInKB();
+                    int throttleInKB = throttleLimit / nodesCount;
+                    logger.debug("Setting hinted handoff throttling limit to {} KB for host {}", throttleInKB, hostId);
+                    rateLimiter.setRate(throttleInKB == 0 ? Double.MAX_VALUE : throttleInKB * 1024);
+                }
 
                 try
                 {
