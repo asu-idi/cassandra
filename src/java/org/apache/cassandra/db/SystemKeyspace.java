@@ -458,6 +458,7 @@ public final class SystemKeyspace
                         .add(TimeFcts.all())
                         .add(BytesConversionFcts.all())
                         .add(AggregateFcts.all())
+                        .add(MetricFcts.all())
                         .build();
     }
 
