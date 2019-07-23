@@ -459,6 +459,7 @@ public final class SystemKeyspace
                         .add(BytesConversionFcts.all())
                         .add(AggregateFcts.all())
                         .add(MetricFcts.all())
+                        .add(ConfigFcts.all())
                         .build();
     }
 
