@@ -1,6 +1,7 @@
 package org.apache.cassandra.cql3.functions;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.Primitives;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -17,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
@@ -28,13 +30,14 @@ public class ConfigFcts
 
     private static final MapType<String, String> MAP_TYPE = MapType.getInstance(UTF8Type.instance, UTF8Type.instance, false);
     private static final List<String> SENSITIVE_KEYS = getSentitiveKeys();
+    private static final Set<String> JVM_MEMORY_ARGS = ImmutableSet.of("-Xmn", "-Xms", "-Xmx", "-Xss");
 
     private static final Config config = getConfig();
     private static final ObjectMapper mapper = createObjectMapper();
 
     public static Collection<Function> all()
     {
-        return ImmutableList.of(cassandraConfig);
+        return ImmutableList.of(cassandraConfig, envConfig, jvmConfig);
     }
 
     public static final Function cassandraConfig = new NativeScalarFunction("cassandraconfig", MAP_TYPE)
@@ -42,6 +45,56 @@ public class ConfigFcts
         public ByteBuffer execute(int protocolVersion, List<ByteBuffer> parameters)
         {
             return MAP_TYPE.decompose(buildConfigMap());
+        }
+    };
+
+    public static final Function envConfig = new NativeScalarFunction("envconfig", MAP_TYPE)
+    {
+        public ByteBuffer execute(int protocolVersion, List<ByteBuffer> parameters)
+        {
+            Map<String, String> map = new HashMap<>();
+            Properties properties = System.getProperties();
+            for (String name : properties.stringPropertyNames())
+            {
+                if (name.startsWith("cassandra.")) map.put(name, properties.getProperty(name));
+            }
+            return MAP_TYPE.decompose(map);
+        }
+    };
+
+    public static final Function jvmConfig = new NativeScalarFunction("jvmconfig", MAP_TYPE)
+    {
+        public ByteBuffer execute(int protocolVersion, List<ByteBuffer> parameters)
+        {
+            List<String> inputArguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
+            Map<String, String> jvmArguments = new HashMap<>();
+            for (String inputArgument : inputArguments)
+            {
+                if (inputArgument.startsWith("-D")) continue;
+                if (inputArgument.startsWith("-XX:+"))
+                {
+                    String name = inputArgument.substring(5);
+                    jvmArguments.put(name, "true");
+                }
+                else if (inputArgument.startsWith("-XX:-"))
+                {
+                    String name = inputArgument.substring(5);
+                    jvmArguments.put(name, "false");
+                }
+                else if (inputArgument.startsWith("-XX:"))
+                {
+                    String property = inputArgument.substring(4);
+                    String[] nameAndValue = property.split("=");
+                    jvmArguments.put(nameAndValue[0], nameAndValue[1]);
+                }
+                else if (inputArgument.length() > 4 && JVM_MEMORY_ARGS.contains(inputArgument.substring(0, 4)))
+                {
+                    String name = inputArgument.substring(1, 4);
+                    String value = inputArgument.substring(4);
+                    jvmArguments.put(name, value);
+                }
+            }
+            return MAP_TYPE.decompose(jvmArguments);
         }
     };
 
