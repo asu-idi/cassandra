@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 import com.google.common.collect.Lists;
 
@@ -43,9 +44,12 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.dht.tokenallocator.TokenAllocation;
 import org.apache.cassandra.dht.Murmur3Partitioner.LongToken;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.gms.ApplicationState;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IFailureDetectionEventListener;
 import org.apache.cassandra.gms.IFailureDetector;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.DynamicEndpointSnitch;
 import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.RackInferringSnitch;
 import org.apache.cassandra.locator.TokenMetadata;
@@ -57,6 +61,7 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -264,7 +269,7 @@ public class BootStrapperTest
         for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces())
         {
             // Skip multi DC keyspace
-            if (keyspaceName.endsWith(multiDCKeyspace))
+            if (keyspaceName.equals(multiDCKeyspace))
                 continue;
 
             int replicationFactor = Keyspace.open(keyspaceName).getReplicationStrategy().getReplicationFactor();
@@ -338,6 +343,139 @@ public class BootStrapperTest
     private double standardDeviation(List<Double> a)
     {
         return Math.sqrt(variance(a));
+    }
+
+    @Test
+    public void testExcludeHighSeverityNodeSingleSource() throws UnknownHostException
+    {
+        int replicationFactor = 1;
+        int numNodes = 1;
+        String keyspaceName = "BootStrapperTestKeyspace2";
+        StorageService ss = StorageService.instance;
+        TokenMetadata tmd = ss.getTokenMetadata();
+
+        generateFakeEndpoints(numNodes);
+        Token myToken = tmd.partitioner.getRandomToken();
+        InetAddress myEndpoint = InetAddress.getByName("127.0.0.1");
+
+        assertEquals(numNodes, tmd.sortedTokens().size());
+
+        RangeStreamer s = new RangeStreamer(tmd, null, myEndpoint, "Bootstrap", true, DatabaseDescriptor.getEndpointSnitch(), new StreamStateStore());
+
+        IEndpointSnitch sn = DatabaseDescriptor.getEndpointSnitch();
+        assertTrue(sn instanceof DynamicEndpointSnitch);
+        DynamicEndpointSnitch snitch = (DynamicEndpointSnitch) sn;
+        s.addSourceFilter(new RangeStreamer.ExcludeHighSeverityNodeFilter(snitch));
+
+        // Set severity
+        InetAddress ep = InetAddress.getByName("127.0.0.2");
+        Gossiper.instance.initializeNodeUnsafe(ep, UUID.randomUUID(), 1);
+        Gossiper.instance.injectApplicationState(ep, ApplicationState.SEVERITY, StorageService.instance.valueFactory.severity(30000));
+
+        boolean sufficicentSource = true;
+        try
+        {
+            s.addRanges(keyspaceName, Keyspace.open(keyspaceName).getReplicationStrategy().getPendingAddressRanges(tmd, myToken, myEndpoint));
+        }
+        catch (IllegalStateException e)
+        {
+            sufficicentSource = false;
+        }
+
+        assertFalse(sufficicentSource);
+
+        // reset severity to 0
+        Gossiper.instance.injectApplicationState(ep, ApplicationState.SEVERITY, StorageService.instance.valueFactory.severity(0));
+
+        // Now it should have enough source to stream
+        s.addRanges(keyspaceName, Keyspace.open(keyspaceName).getReplicationStrategy().getPendingAddressRanges(tmd, myToken, myEndpoint));
+
+        Collection<Map.Entry<InetAddress, Collection<Range<Token>>>> toFetch = s.toFetch().get(keyspaceName);
+
+        // Check we get get RF new ranges in total
+        Set<Range<Token>> ranges = new HashSet<>();
+        for (Map.Entry<InetAddress, Collection<Range<Token>>> e : toFetch)
+            ranges.addAll(e.getValue());
+
+        assertEquals(replicationFactor, ranges.size());
+
+        // there isn't any point in testing the size of these collections for any specific size.  When a random partitioner
+        // is used, they will vary.
+        assert toFetch.iterator().next().getValue().size() > 0;
+        assert !toFetch.iterator().next().getKey().equals(myEndpoint);
+    }
+
+    @Test
+    public void testSourceTargetComputationExcludeHighSeverityNode() throws UnknownHostException
+    {
+        final int[] clusterSizes = new int[] { 1, 3, 5, 10, 100};
+        for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces())
+        {
+            // Skip multi DC keyspace
+            if (keyspaceName.equals(multiDCKeyspace))
+                continue;
+
+            int replicationFactor = Keyspace.open(keyspaceName).getReplicationStrategy().getReplicationFactor();
+            for (int clusterSize : clusterSizes)
+                if (clusterSize >= replicationFactor)
+                    testSourceTargetComputationExcludeHighSeverityNode(keyspaceName, clusterSize, replicationFactor);
+        }
+    }
+
+    private void testSourceTargetComputationExcludeHighSeverityNode(String keyspaceName, int numOldNodes, int replicationFactor) throws UnknownHostException
+    {
+        StorageService ss = StorageService.instance;
+        TokenMetadata tmd = ss.getTokenMetadata();
+
+        generateFakeEndpoints(numOldNodes);
+        Token myToken = tmd.partitioner.getRandomToken();
+        InetAddress myEndpoint = InetAddress.getByName("127.0.0.1");
+
+        assertEquals(numOldNodes, tmd.sortedTokens().size());
+        RangeStreamer s = new RangeStreamer(tmd, null, myEndpoint, "Bootstrap", true, DatabaseDescriptor.getEndpointSnitch(), new StreamStateStore());
+
+        IEndpointSnitch sn = DatabaseDescriptor.getEndpointSnitch();
+        assertTrue(sn instanceof DynamicEndpointSnitch);
+        DynamicEndpointSnitch snitch = (DynamicEndpointSnitch) sn;
+        s.addSourceFilter(new RangeStreamer.ExcludeHighSeverityNodeFilter(snitch));
+
+        // Set severity
+        InetAddress ep = InetAddress.getByName("127.0.0.2");
+        Gossiper.instance.initializeNodeUnsafe(ep, UUID.randomUUID(), 1);
+        Gossiper.instance.injectApplicationState(ep, ApplicationState.SEVERITY, StorageService.instance.valueFactory.severity(30000));
+
+        // Streaming should not include 127.0.0.2, or throw exception for unable to find sufficicent source
+        boolean sufficicentSource = true;
+        try
+        {
+            s.addRanges(keyspaceName, Keyspace.open(keyspaceName).getReplicationStrategy().getPendingAddressRanges(tmd, myToken, myEndpoint));
+        }
+        catch (IllegalStateException e)
+        {
+            sufficicentSource = false;
+        }
+
+        if (!sufficicentSource)
+            return;
+
+        Collection<Map.Entry<InetAddress, Collection<Range<Token>>>> toFetch = s.toFetch().get(keyspaceName);
+
+        // Check we get get RF new ranges in total
+        Set<Range<Token>> ranges = new HashSet<>();
+        for (Map.Entry<InetAddress, Collection<Range<Token>>> e : toFetch)
+        {
+            // source node should never be ep
+            assertFalse(e.getKey().equals(ep));
+            ranges.addAll(e.getValue());
+        }
+
+        assertEquals(replicationFactor, ranges.size());
+
+        // there isn't any point in testing the size of these collections for any specific size.  When a random partitioner
+        // is used, they will vary.
+        assert toFetch.iterator().next().getValue().size() > 0;
+        assert !toFetch.iterator().next().getKey().equals(myEndpoint);
+        return;
     }
 
     private void generateFakeEndpoints(int numOldNodes) throws UnknownHostException

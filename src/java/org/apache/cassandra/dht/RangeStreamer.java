@@ -36,6 +36,7 @@ import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IFailureDetector;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.DynamicEndpointSnitch;
 import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.TokenMetadata;
 import org.apache.cassandra.service.StorageService;
@@ -155,6 +156,21 @@ public class RangeStreamer
         public boolean shouldInclude(InetAddress endpoint)
         {
             return !FBUtilities.getBroadcastAddress().equals(endpoint);
+        }
+    }
+
+    public static class ExcludeHighSeverityNodeFilter implements ISourceFilter
+    {
+        private final DynamicEndpointSnitch snitch;
+        public ExcludeHighSeverityNodeFilter(DynamicEndpointSnitch snitch)
+        {
+            this.snitch = snitch;
+        }
+
+        public boolean shouldInclude(InetAddress endpoint)
+        {
+            double severity = snitch.getSeverity(endpoint);
+            return severity < Double.parseDouble(System.getProperty("cassandra.streaming_exclude_severity_threshold", "20000"));
         }
     }
 

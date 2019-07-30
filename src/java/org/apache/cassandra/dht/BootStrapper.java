@@ -39,6 +39,8 @@ import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.DynamicEndpointSnitch;
+import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.locator.TokenMetadata;
 import org.apache.cassandra.service.StorageService;
@@ -72,12 +74,14 @@ public class BootStrapper extends ProgressEventNotifierSupport
     {
         logger.trace("Beginning bootstrap process");
 
+        IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
+
         RangeStreamer streamer = new RangeStreamer(tokenMetadata,
                                                    tokens,
                                                    address,
                                                    "Bootstrap",
                                                    useStrictConsistency,
-                                                   DatabaseDescriptor.getEndpointSnitch(),
+                                                   snitch,
                                                    stateStore);
         streamer.addSourceFilter(new RangeStreamer.FailureDetectorSourceFilter(FailureDetector.instance));
         streamer.addSourceFilter(new RangeStreamer.ExcludeLocalNodeFilter());
@@ -89,6 +93,9 @@ public class BootStrapper extends ProgressEventNotifierSupport
                                                                              tokenMetadata.cloneOnlyTokenMap().getTopology().getDatacenterRacks().keySet(),
                                                                              configuredSourceDCs));
         }
+
+        if (snitch instanceof DynamicEndpointSnitch)
+            streamer.addSourceFilter(new RangeStreamer.ExcludeHighSeverityNodeFilter((DynamicEndpointSnitch)snitch));
 
         for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces())
         {
