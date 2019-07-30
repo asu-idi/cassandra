@@ -289,17 +289,17 @@ public class StorageProxy implements StorageProxyMBean
         }
         catch (WriteTimeoutException|ReadTimeoutException e)
         {
-            casWriteMetrics.timeouts.mark();
+            casWriteMetrics.timeouts.mark(e.consistency);
             throw e;
         }
         catch (WriteFailureException|ReadFailureException e)
         {
-            casWriteMetrics.failures.mark();
+            casWriteMetrics.failures.mark(e.consistency);
             throw e;
         }
         catch(UnavailableException e)
         {
-            casWriteMetrics.unavailables.mark();
+            casWriteMetrics.unavailables.mark(e.consistency);
             throw e;
         }
         finally
@@ -622,15 +622,15 @@ public class StorageProxy implements StorageProxyMBean
             {
                 if (ex instanceof WriteFailureException)
                 {
-                    writeMetrics.failures.mark();
                     WriteFailureException fe = (WriteFailureException)ex;
+                    writeMetrics.failures.mark(fe.consistency);
                     Tracing.trace("Write failure; received {} of {} required replies, failed {} requests",
                                   fe.received, fe.blockFor, fe.failures);
                 }
                 else
                 {
-                    writeMetrics.timeouts.mark();
                     WriteTimeoutException te = (WriteTimeoutException)ex;
+                    writeMetrics.timeouts.mark(te.consistency);
                     Tracing.trace("Write timeout; received {} of {} required replies", te.received, te.blockFor);
                 }
                 throw ex;
@@ -638,13 +638,13 @@ public class StorageProxy implements StorageProxyMBean
         }
         catch (UnavailableException e)
         {
-            writeMetrics.unavailables.mark();
+            writeMetrics.unavailables.mark(e.consistency);
             Tracing.trace("Unavailable");
             throw e;
         }
         catch (OverloadedException e)
         {
-            writeMetrics.unavailables.mark();
+            writeMetrics.unavailables.mark(consistency_level);
             Tracing.trace("Overloaded");
             throw e;
         }
@@ -897,19 +897,19 @@ public class StorageProxy implements StorageProxyMBean
         }
         catch (UnavailableException e)
         {
-            writeMetrics.unavailables.mark();
+            writeMetrics.unavailables.mark(e.consistency);
             Tracing.trace("Unavailable");
             throw e;
         }
         catch (WriteTimeoutException e)
         {
-            writeMetrics.timeouts.mark();
+            writeMetrics.timeouts.mark(e.consistency);
             Tracing.trace("Write timeout; received {} of {} required replies", e.received, e.blockFor);
             throw e;
         }
         catch (WriteFailureException e)
         {
-            writeMetrics.failures.mark();
+            writeMetrics.failures.mark(e.consistency);
             Tracing.trace("Write failure; received {} of {} required replies", e.received, e.blockFor);
             throw e;
         }
@@ -1541,7 +1541,7 @@ public class StorageProxy implements StorageProxyMBean
     {
         if (StorageService.instance.isBootstrapMode() && !systemKeyspaceQuery(group.commands))
         {
-            readMetrics.unavailables.mark();
+            readMetrics.unavailables.mark(consistencyLevel);
             throw new IsBootstrappingException();
         }
 
@@ -1594,20 +1594,20 @@ public class StorageProxy implements StorageProxyMBean
         }
         catch (UnavailableException e)
         {
-            readMetrics.unavailables.mark();
-            casReadMetrics.unavailables.mark();
+            readMetrics.unavailables.mark(e.consistency);
+            casReadMetrics.unavailables.mark(e.consistency);
             throw e;
         }
         catch (ReadTimeoutException e)
         {
-            readMetrics.timeouts.mark();
-            casReadMetrics.timeouts.mark();
+            readMetrics.timeouts.mark(e.consistency);
+            casReadMetrics.timeouts.mark(e.consistency);
             throw e;
         }
         catch (ReadFailureException e)
         {
-            readMetrics.failures.mark();
-            casReadMetrics.failures.mark();
+            readMetrics.failures.mark(e.consistency);
+            casReadMetrics.failures.mark(e.consistency);
             throw e;
         }
         finally
@@ -1640,17 +1640,17 @@ public class StorageProxy implements StorageProxyMBean
         }
         catch (UnavailableException e)
         {
-            readMetrics.unavailables.mark();
+            readMetrics.unavailables.mark(e.consistency);
             throw e;
         }
         catch (ReadTimeoutException e)
         {
-            readMetrics.timeouts.mark();
+            readMetrics.timeouts.mark(e.consistency);
             throw e;
         }
         catch (ReadFailureException e)
         {
-            readMetrics.failures.mark();
+            readMetrics.failures.mark(e.consistency);
             throw e;
         }
         finally
@@ -2081,17 +2081,17 @@ public class StorageProxy implements StorageProxyMBean
             }
             catch (UnavailableException e)
             {
-                rangeMetrics.unavailables.mark();
+                rangeMetrics.unavailables.mark(e.consistency);
                 throw e;
             }
             catch (ReadTimeoutException e)
             {
-                rangeMetrics.timeouts.mark();
+                rangeMetrics.timeouts.mark(e.consistency);
                 throw e;
             }
             catch (ReadFailureException e)
             {
-                rangeMetrics.failures.mark();
+                rangeMetrics.failures.mark(e.consistency);
                 throw e;
             }
         }

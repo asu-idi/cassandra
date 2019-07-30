@@ -21,31 +21,90 @@
 package org.apache.cassandra.metrics;
 
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.google.common.annotations.VisibleForTesting;
+
 import com.codahale.metrics.Meter;
+import org.apache.cassandra.db.ConsistencyLevel;
 
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 
 
 public class ClientRequestMetrics extends LatencyMetrics
 {
-    public final Meter timeouts;
-    public final Meter unavailables;
-    public final Meter failures;
+    public final ConsistencyAwareExceptionMeters timeouts;
+    public final ConsistencyAwareExceptionMeters unavailables;
+    public final ConsistencyAwareExceptionMeters failures;
 
     public ClientRequestMetrics(String scope)
     {
         super("ClientRequest", scope);
 
-        timeouts = Metrics.meter(factory.createMetricName("Timeouts"));
-        unavailables = Metrics.meter(factory.createMetricName("Unavailables"));
-        failures = Metrics.meter(factory.createMetricName("Failures"));
+        timeouts = new ConsistencyAwareExceptionMeters("Timeouts");
+        unavailables = new ConsistencyAwareExceptionMeters("Unavailables");
+        failures =  new ConsistencyAwareExceptionMeters("Failures");
     }
 
     public void release()
     {
         super.release();
-        Metrics.remove(factory.createMetricName("Timeouts"));
-        Metrics.remove(factory.createMetricName("Unavailables"));
-        Metrics.remove(factory.createMetricName("Failures"));
+        timeouts.release();
+        unavailables.release();
+        failures.release();
+    }
+
+    public class ConsistencyAwareExceptionMeters
+    {
+        private final String metricName;
+        private final Meter meter;
+        private final Map<ConsistencyLevel, Meter> clToMeterMap;
+
+        public ConsistencyAwareExceptionMeters(String name)
+        {
+            metricName = name;
+            meter = Metrics.meter(factory.createMetricName(metricName));
+            clToMeterMap = Arrays.stream(ConsistencyLevel.values()).collect(Collectors.toMap(
+                cl -> cl, cl -> Metrics.meter(factory.createMetricName(String.format("%s-%s", metricName, cl.toString())))
+            ));
+        }
+
+        public void mark(ConsistencyLevel cl)
+        {
+            Meter clMeter = getCLMeter(cl);
+            if (clMeter != null)
+                clMeter.mark();
+            meter.mark();
+        }
+
+        public void release()
+        {
+            Metrics.remove(factory.createMetricName(metricName));
+            Arrays.stream(ConsistencyLevel.values()).forEach(cl -> Metrics.remove(
+                factory.createMetricName(String.format("%s-%s", metricName, cl.toString()))
+            ));
+        }
+
+        @VisibleForTesting
+        protected Meter getCLMeter(ConsistencyLevel cl)
+        {
+            if (cl == null)
+                return null;
+            return clToMeterMap.get(cl);
+        }
+
+        @VisibleForTesting
+        protected Meter getMeter()
+        {
+            return meter;
+        }
+
+        @VisibleForTesting
+        protected String getMetricName()
+        {
+            return metricName;
+        }
     }
 }
