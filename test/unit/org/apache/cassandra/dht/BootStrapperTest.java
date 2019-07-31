@@ -20,7 +20,6 @@ package org.apache.cassandra.dht;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +32,6 @@ import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -82,6 +80,8 @@ public class BootStrapperTest
         DatabaseDescriptor.setPartitionerUnsafe(oldPartitioner);
     }
 
+    private final String multiDCKeyspace = "BootStrapperTest_MultiDCReplace";
+
     @Test
     public void testMultiDCReplacementWithVNode() throws Exception
     {
@@ -89,7 +89,7 @@ public class BootStrapperTest
         try
         {
             DatabaseDescriptor.setEndpointSnitch(new RackInferringSnitch());
-            KeyspaceMetadata ksm = KeyspaceMetadata.create("BootStrapperTest_MultiDCReplace", KeyspaceParams.nts("0", 1, "1", 1, "2", 1, "3", 1, "4", 1));
+            KeyspaceMetadata ksm = KeyspaceMetadata.create(multiDCKeyspace, KeyspaceParams.nts("0", 1, "1", 1, "2", 1, "3", 1, "4", 1));
             MigrationManager.announceNewKeyspace(ksm, false);
             AbstractReplicationStrategy replicationStrategy = Keyspace.open(ksm.name).getReplicationStrategy();
 
@@ -257,13 +257,16 @@ public class BootStrapperTest
         }
     }
 
-    @Ignore("Please fix T46015013")
     @Test
     public void testSourceTargetComputation() throws UnknownHostException
     {
         final int[] clusterSizes = new int[] { 1, 3, 5, 10, 100};
         for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces())
         {
+            // Skip multi DC keyspace
+            if (keyspaceName.endsWith(multiDCKeyspace))
+                continue;
+
             int replicationFactor = Keyspace.open(keyspaceName).getReplicationStrategy().getReplicationFactor();
             for (int clusterSize : clusterSizes)
                 if (clusterSize >= replicationFactor)
