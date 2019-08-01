@@ -21,6 +21,8 @@ package org.apache.cassandra.rocksdb.streaming;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.google.common.base.Throwables;
 import org.slf4j.Logger;
@@ -82,13 +84,17 @@ public class RocksDBStreamReader
                      cfs.getTableName());
         sstableIngested = 0;
         incomingBytesDelta = 0;
-        for (int expectedShardId = 0; expectedShardId < RocksDBConfigs.NUM_SHARD; expectedShardId++)
-        {
 
+        Set<Integer> shardIdSet = new HashSet<Integer>();
+        for (int i = 0; i < RocksDBConfigs.NUM_SHARD; i++)
+        {
             int shardId = input.readInt();
+            if (shardIdSet.contains(shardId)) {
+                throw new StreamingShardDuplicateException(header, shardId);
+            }
+            shardIdSet.add(shardId);
+
             LOGGER.info("Receiving shard: " + shardId);
-            if (shardId != expectedShardId)
-                throw new StreamingShardMismatchException(header, shardId, expectedShardId);
 
             for (RocksCFName expectedRocksCFName : RocksCFName.NEED_STREAM)
             {

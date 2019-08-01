@@ -86,7 +86,7 @@ public class RocksDBMessageHeader
 
     static class RocksDBMessageHeaderSerializer
     {
-        public static final int CURRENT_STREAMING_SCHEMA_VERSION = 0;
+        public static final int CURRENT_STREAMING_SCHEMA_VERSION = 1;
 
         public void seriliaze(RocksDBMessageHeader header, DataOutputPlus out) throws IOException
         {

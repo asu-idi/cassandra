@@ -20,13 +20,14 @@ package org.apache.cassandra.rocksdb.streaming;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.ByteBuf;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.metrics.StreamingMetrics;
@@ -101,7 +102,7 @@ public class RocksDBStreamWriter
         streamedPairs = 0;
 
         // Iterate through all shards.
-        for (int shardId = 0; shardId < RocksDBConfigs.NUM_SHARD; shardId++)
+        for (int shardId : shuffleShardIds())
         {
             // Send shard number first.
             out.write(ByteBufferUtil.bytes(shardId).array());
@@ -126,6 +127,16 @@ public class RocksDBStreamWriter
         out.write(md5Digest);
         LOGGER.info("Stream digest: " + Hex.bytesToHex(md5Digest));
         updateProgress(true);
+    }
+
+    private List<Integer> shuffleShardIds()
+    {
+        List<Integer> shardIdList = new ArrayList<Integer>();
+        for (int shardId = 0; shardId < RocksDBConfigs.NUM_SHARD; shardId++) {
+            shardIdList.add(shardId);
+        }
+        Collections.shuffle(shardIdList);
+        return shardIdList;
     }
 
     private void writeForRange(OutputStream out, RocksDBIteratorAdapter iterator, Range<Token> range, int limit) throws IOException
