@@ -460,6 +460,7 @@ public final class SystemKeyspace
                         .add(AggregateFcts.all())
                         .add(MetricFcts.all())
                         .add(ConfigFcts.all())
+                        .add(UtilFcts.all())
                         .build();
     }
 
