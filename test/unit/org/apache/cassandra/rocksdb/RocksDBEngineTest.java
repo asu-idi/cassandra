@@ -18,7 +18,11 @@
 
 package org.apache.cassandra.rocksdb;
 
-import java.util.Map;
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -61,8 +65,26 @@ public class RocksDBEngineTest extends RocksDBTestBase
         assertTrue(engine.memoryUsage().get("kMemTableTotal") > 0);
     }
 
-    @Test
-    public void testTruncate() throws Throwable
+    private Set<File> getSnapshotList(String tableName)
+    {
+        final Set<File> snapshots = new HashSet<>();
+        Path snapshotPath = Paths.get(RocksDBConfigs.ROCKSDB_DIR, "s0", RocksDBConfigs.ROCKSDB_KEYSPACE, tableName, "snapshots");
+
+        File snapshotDir = new File(snapshotPath.toString());
+        if (snapshotDir.exists() && snapshotDir.isDirectory())
+        {
+            final File[] snapshotDirs = snapshotDir.listFiles();
+            if (snapshotDirs != null)
+            {
+                for (final File snap : snapshotDirs)
+                    snapshots.add(snap);
+            }
+        }
+
+        return snapshots;
+    }
+
+    private void generateTestData() throws Throwable
     {
         createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");
         execute("INSERT INTO %s(p, c, v) values (?, ?, ?)", "p1", "k1", "v1");
@@ -75,12 +97,74 @@ public class RocksDBEngineTest extends RocksDBTestBase
 
         assertRows(execute("SELECT * from %s WHERE p = ?", "p2"),
                    row("p2", "k", "v"));
+    }
+
+    @Test
+    public void testTruncate() throws Throwable
+    {
+        generateTestData();
 
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         cfs.truncateBlocking();
         assertEmpty(execute("SELECT * from %s WHERE p = ? AND c = ?", "p1", "k1"));
         assertEmpty(execute("SELECT * from %s WHERE p = ? AND c = ?", "p1", "k2"));
         assertEmpty(execute("SELECT * from %s WHERE p = ? AND c = ?", "p2", "k"));
+    }
+
+    @Test
+    public void testTruncateWithAutoSnapshot() throws Throwable
+    {
+        boolean originalState = DatabaseDescriptor.isAutoSnapshot();
+
+        try
+        {
+            DatabaseDescriptor.setAutoSnapshot(true);
+
+            generateTestData();
+
+            ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+
+            // Make sure there's no snapshot
+            Set<File> snapshots = getSnapshotList(cfs.getTableName());
+            assertFalse(snapshots.stream().anyMatch(x -> x.getName().endsWith("truncate")));
+            cfs.truncateBlocking();
+
+            // Make sure there's a snapshot
+            snapshots = getSnapshotList(cfs.getTableName());
+            assertTrue(snapshots.stream().anyMatch(x -> x.getName().endsWith("truncate")));
+        }
+        finally
+        {
+            DatabaseDescriptor.setAutoSnapshot(originalState);
+        }
+    }
+
+    @Test
+    public void testTruncateWithoutAutoSnapshot() throws Throwable
+    {
+        boolean originalState = DatabaseDescriptor.isAutoSnapshot();
+
+        try
+        {
+            DatabaseDescriptor.setAutoSnapshot(false);
+
+            generateTestData();
+
+            ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+
+            // Make sure there's no snapshot
+            Set<File> snapshots = getSnapshotList(cfs.getTableName());
+            assertFalse(snapshots.stream().anyMatch(x -> x.getName().endsWith("truncate")));
+            cfs.truncateBlocking();
+
+            // Make sure there's a snapshot
+            snapshots = getSnapshotList(cfs.getTableName());
+            assertFalse(snapshots.stream().anyMatch(x -> x.getName().endsWith("truncate")));
+        }
+        finally
+        {
+            DatabaseDescriptor.setAutoSnapshot(originalState);
+        }
     }
 
     @Test

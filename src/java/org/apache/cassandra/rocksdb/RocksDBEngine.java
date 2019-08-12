@@ -230,11 +230,15 @@ public class RocksDBEngine implements StorageEngine
             RocksDBCF rocksDBCF = getRocksDBCF(cfs);
 
             if (rocksDBCF != null)
+            {
+                if (DatabaseDescriptor.isAutoSnapshot())
+                    rocksDBCF.createSnapshot(Keyspace.getTimestampedSnapshotName("truncate"));
                 rocksDBCF.truncate();
+            }
             else
                 logger.info("Can not find rocksdb table: " + cfs.name);
         }
-        catch (RocksDBException e)
+        catch (RocksDBException | IOException e)
         {
             logger.error(e.toString(), e);
         }
