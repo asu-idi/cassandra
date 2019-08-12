@@ -33,6 +33,10 @@ import java.util.stream.Collectors;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.security.cert.X509Certificate;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -1176,7 +1180,18 @@ public final class MessagingService implements MessagingServiceMBean
 
         private boolean authenticate()
         {
-            return DatabaseDescriptor.getInternodeAuthenticator().authenticate(socket);
+          X509Certificate[] certificates = null;
+          if (socket instanceof SSLSocket) {
+            try {
+              certificates = ((SSLSocket) socket).getSession().getPeerCertificateChain();
+            }
+            catch (SSLPeerUnverifiedException e){
+              logger.warn("Failed to get peer certificates for peer {}", socket.getInetAddress(), e);
+            }
+          }
+
+          return DatabaseDescriptor.getInternodeAuthenticator().authenticate(
+            certificates, socket.getInetAddress(), socket.getPort());
         }
     }
 

@@ -21,6 +21,7 @@ package org.apache.cassandra.auth;
 
 import java.net.InetAddress;
 import java.net.Socket;
+import javax.security.cert.X509Certificate;
 
 import org.apache.cassandra.exceptions.ConfigurationException;
 
@@ -40,11 +41,13 @@ public interface IInternodeAuthenticator
      * Decides whether or not a peer is allowed to connect to this node.
      * If this method returns false, the socket will be immediately closed.
      *
-     * @param socket socket object for the connecting node
+     * @param certificates the peer's X509 Certificate chain, if present.
+     * @param remoteAddress ip address of the connecting node.
+     * @param remotePort port of the connecting node.
      * @return true if the connection should be accepted, false otherwise.
      */
-    default boolean authenticate(Socket socket) {
-        return authenticate(socket.getInetAddress(), socket.getPort());
+    default boolean authenticate(X509Certificate[] certificates, InetAddress remoteAddress, int remotePort) {
+        return authenticate(remoteAddress, remotePort);
     }
 
     /**
