@@ -198,7 +198,7 @@ public class ReadCallback implements IAsyncCallbackWithFailure<ReadResponse>
 
     public void assureSufficientLiveNodes() throws UnavailableException
     {
-        consistencyLevel.assureSufficientLiveNodes(keyspace, endpoints, ConsistencyLevel.Usage.READ);
+        consistencyLevel.assureSufficientLiveNodesForRead(keyspace, endpoints, ConsistencyLevel.Usage.READ);
     }
 
     public boolean isLatencyForSnitch()

@@ -162,6 +162,28 @@ public enum ConsistencyLevel
         }
     }
 
+    public int blockForWrite(Keyspace keyspace, Iterable<InetAddress> pending, Usage usage)
+    {
+        assert pending != null;
+
+        int blockFor = blockFor(keyspace, usage);
+        switch (this)
+        {
+            case ANY:
+                break;
+            case LOCAL_ONE: case LOCAL_QUORUM: case LOCAL_SERIAL:
+                // we will only count local replicas towards our response count, as these queries only care about local guarantees
+                blockFor += countLocalEndpoints(pending);
+                break;
+            case ONE: case TWO: case THREE:
+            case QUORUM: case EACH_QUORUM:
+            case SERIAL:
+            case ALL:
+                blockFor += Iterables.size(pending);
+        }
+        return blockFor;
+    }
+
     public boolean isDatacenterLocal()
     {
         return isDCLocal;
@@ -305,9 +327,26 @@ public enum ConsistencyLevel
         }
     }
 
-    public void assureSufficientLiveNodes(Keyspace keyspace, Iterable<InetAddress> liveEndpoints, Usage usage) throws UnavailableException
+    public void assureSufficientLiveNodesForRead(Keyspace keyspace,
+                                                 Iterable<InetAddress> liveEndpoints,
+                                                 Usage usage) throws UnavailableException
     {
-        int blockFor = blockFor(keyspace, usage);
+        assureSufficientLiveNodes(keyspace, liveEndpoints, usage, blockFor(keyspace, usage));
+    }
+
+    public void assureSufficientLiveNodesForWrite(Keyspace keyspace,
+                                                  Iterable<InetAddress> liveEndpoints,
+                                                  Usage usage,
+                                                  Iterable<InetAddress> pendingEndpoints) throws UnavailableException
+    {
+        assureSufficientLiveNodes(keyspace, liveEndpoints, usage, blockForWrite(keyspace, pendingEndpoints, usage));
+    }
+
+    private void assureSufficientLiveNodes(Keyspace keyspace,
+                                           Iterable<InetAddress> liveEndpoints,
+                                           Usage usage,
+                                           int blockFor) throws UnavailableException
+    {
         switch (this)
         {
             case ANY:

@@ -159,7 +159,7 @@ public abstract class AbstractReadExecutor
         List<InetAddress> targetReplicas = consistencyLevel.filterForQuery(keyspace, allReplicas, repairDecision);
 
         // Throw UAE early if we don't have enough replicas.
-        consistencyLevel.assureSufficientLiveNodes(keyspace, targetReplicas, ConsistencyLevel.Usage.READ);
+        consistencyLevel.assureSufficientLiveNodesForRead(keyspace, targetReplicas, ConsistencyLevel.Usage.READ);
 
         if (repairDecision != ReadRepairDecision.NONE)
         {

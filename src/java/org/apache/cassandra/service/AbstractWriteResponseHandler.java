@@ -142,7 +142,10 @@ public abstract class AbstractWriteResponseHandler<T> implements IAsyncCallbackW
 
     public void assureSufficientLiveNodes() throws UnavailableException
     {
-        consistencyLevel.assureSufficientLiveNodes(keyspace, Iterables.filter(Iterables.concat(naturalEndpoints, pendingEndpoints), isAlive), ConsistencyLevel.Usage.WRITE);
+        consistencyLevel.assureSufficientLiveNodesForWrite(keyspace,
+                                                           Iterables.filter(Iterables.concat(naturalEndpoints, pendingEndpoints), isAlive),
+                                                           ConsistencyLevel.Usage.WRITE,
+                                                           pendingEndpoints);
     }
 
     protected void signal()
