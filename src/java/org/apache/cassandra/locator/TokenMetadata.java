@@ -460,7 +460,7 @@ public class TokenMetadata
         try
         {
             bootstrapTokens.removeValue(endpoint);
-            tokenToEndpointMap.removeValue(endpoint);
+
             topology = topology.unbuild().removeEndpoint(endpoint).build();
             leavingEndpoints.remove(endpoint);
             if (replacementToOriginal.remove(endpoint) != null)
@@ -468,8 +468,12 @@ public class TokenMetadata
                 logger.debug("Node {} failed during replace.", endpoint);
             }
             endpointToHostIdMap.remove(endpoint);
-            sortedTokens = sortTokens();
-            invalidateCachedRings();
+            Collection<Token> removedTokens = tokenToEndpointMap.removeValue(endpoint);
+            if (removedTokens != null && !removedTokens.isEmpty())
+            {
+                sortedTokens = sortTokens();
+                invalidateCachedRings();
+            }
         }
         finally
         {
