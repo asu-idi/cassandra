@@ -480,7 +480,7 @@
         <dependency groupId="org.openjdk.jmh" artifactId="jmh-generator-annprocess"/>
         <dependency groupId="net.ju-n.compile-command-annotations" artifactId="compile-command-annotations"/>
         <dependency groupId="org.apache.ant" artifactId="ant-junit" version="1.9.4" />
-        <dependency groupId="org.rocksdb" artifactId="rocksdbjni" version="5.14.3" scope="system" systemPath="${basedir}/lib/rocksdbjni-5.14.3.jar"/>
+        <dependency groupId="org.rocksdb" artifactId="rocksdbjni" version="7.9.2" scope="system" systemPath="${basedir}/lib/rocksdbjni-7.9.2.jar"/>
       </artifact:pom>
       <!-- this build-deps-pom-sources "artifact" is the same as build-deps-pom but only with those
            artifacts that have "-source.jar" files -->
