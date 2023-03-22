@@ -18,7 +18,7 @@ ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 ENV ANT_HOME /opt/ant
 ENV PATH $PATH:$JAVA_HOME/bin:$ANT_HOME/bin
 
-WORKDIR rocksandra
+WORKDIR /rocksandra
 
-ENTRYPOINT [ "/bin/bash" ]
+# ENTRYPOINT [ "/bin/bash" ]
 CMD [ "/bin/bash" ]
