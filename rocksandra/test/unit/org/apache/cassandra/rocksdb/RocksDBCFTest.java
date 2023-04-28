@@ -207,4 +207,9 @@ public class RocksDBCFTest extends RocksDBTestBase
         rocksDBCF.merge(RocksCFName.INDEX, dk, key, value);
         assertArrayEquals(value, rocksDBCF.get(RocksCFName.INDEX, dk, key));
     }
+    
+    @Test
+    public void secondaryInstanceTest() {
+        System.out.println("Hello from SecondaryInstanceTest");
+    }
 }

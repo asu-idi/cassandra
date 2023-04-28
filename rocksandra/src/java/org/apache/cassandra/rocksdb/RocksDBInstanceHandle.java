@@ -22,10 +22,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.rocksdb.MutableDBOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +83,10 @@ public class RocksDBInstanceHandle
     private final IngestExternalFileOptions ingestExternalFileOptions;
     private final IngestExternalFileOptions ingestExternalFileOptionsWithIngestBehind;
 
+    private final DBOptions dbOptions;
+    private final List<ColumnFamilyDescriptor> cfDescs;
+    private final ArrayList<ColumnFamilyHandle> columnFamilyHandles;
+    
     public RocksDBInstanceHandle(ColumnFamilyStore cfs,
                                  String rocksDBTableDir,
                                  BlockBasedTableConfig tableOptions,
@@ -99,7 +103,7 @@ public class RocksDBInstanceHandle
         // holding reference avoid compaction filter instance get gc
         this.compactionFilter = new CassandraCompactionFilter(purgeTtlOnExpiration, true, gcGraceSeconds);
 
-        DBOptions dbOptions = new DBOptions();
+        dbOptions = new DBOptions();
         SstFileManager sstFileManager = new SstFileManager(Env.getDefault());
 
         final long writeBufferSize = RocksDBConfigs.WRITE_BUFFER_SIZE_MBYTES * 1024 * 1024L;
@@ -125,8 +129,8 @@ public class RocksDBInstanceHandle
         dbOptions.setAllowIngestBehind(RocksDBConfigs.ALLOW_INGEST_BEHIND);
         dbOptions.setDumpMallocStats(RocksDBConfigs.DUMP_MALLOC_STATS);
 
-        List<ColumnFamilyDescriptor> cfDescs = new ArrayList<>(3);
-        ArrayList<ColumnFamilyHandle> columnFamilyHandles = new ArrayList<>(3);
+        cfDescs = new ArrayList<>(3);
+        columnFamilyHandles = new ArrayList<>(3);
 
         // config meta column family
         ColumnFamilyOptions metaCfOptions = new ColumnFamilyOptions();
@@ -423,5 +427,14 @@ public class RocksDBInstanceHandle
     public RocksDB getDB()
     {
         return rocksDB;
+    }
+    
+    public RocksDB OpenAsSecondary(String secondaryPath) throws RocksDBException {
+        return rocksDB.openAsSecondary(dbOptions, rocksDBPath, secondaryPath, cfDescs, columnFamilyHandles);
+    }
+
+    public void TryCatchUpWithPrimary(RocksDB rocksDB) throws RocksDBException 
+    {
+        rocksDB.tryCatchUpWithPrimary();
     }
 }
