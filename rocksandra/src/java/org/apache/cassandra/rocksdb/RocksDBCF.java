@@ -235,6 +235,22 @@ public class RocksDBCF implements RocksDBCFMBean
         return dbhandle.get(rocksCFName, readOptions, key);
     }
 
+    public byte[] getFromSecondaryInstance(DecoratedKey partitionKey, byte[] key) throws RocksDBException
+    {
+        return getFromSecondaryInstance(RocksCFName.DEFAULT, partitionKey, key);
+    }
+
+    public byte[] getFromSecondaryInstance(RocksCFName rocksCFName, DecoratedKey partitionKey, byte[] key) throws RocksDBException
+    {
+        RocksDBInstanceHandle dbhandle = getDBHandleForPartitionKey(partitionKey);
+        return dbhandle.getFromSecondaryInstance(rocksCFName, readOptions, key);
+    }
+
+    public void tryCatchUpWithPrimary(DecoratedKey partitionKey) throws RocksDBException {
+        RocksDBInstanceHandle dbhandle = getDBHandleForPartitionKey(partitionKey);
+        dbhandle.tryCatchUpWithPrimary();
+    }
+    
     private RocksDBInstanceHandle getDBHandleForPartitionKey(DecoratedKey partitionKey)
     {
         return rocksDBHandles.get(getShardIdForKey(partitionKey));

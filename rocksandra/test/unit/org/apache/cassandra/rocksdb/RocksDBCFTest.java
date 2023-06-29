@@ -110,6 +110,26 @@ public class RocksDBCFTest extends RocksDBTestBase
         assertNull(rocksDBCF.get(dk, c));
         assertArrayEquals(value, rocksDBCF.get(dk, d));
     }
+    
+    @Test
+    public void secondaryInstanceTest() throws RocksDBException {
+        createTable("CREATE TABLE %s (p text, c text, v text, PRIMARY KEY (p, c))");
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+
+        RocksDBCF rocksDBCF = RocksDBEngine.getRocksDBCF(cfs.metadata.cfId);
+
+        byte[] a = "a".getBytes();
+        byte[] value = encodeValue(cfs, "test_value");
+        
+        rocksDBCF.merge(dk, a, value);
+        
+        // Before usng TCUWP()
+        assertNull(rocksDBCF.getFromSecondaryInstance(dk,a));
+
+        // After usng TCUWP()
+        rocksDBCF.tryCatchUpWithPrimary(dk);
+        assertArrayEquals(value, rocksDBCF.getFromSecondaryInstance(dk,a));
+    }
 
     @Test
     public void testTruncate() throws RocksDBException
@@ -206,10 +226,5 @@ public class RocksDBCFTest extends RocksDBTestBase
         byte[] value = encodeValue(cfs, "test_value");
         rocksDBCF.merge(RocksCFName.INDEX, dk, key, value);
         assertArrayEquals(value, rocksDBCF.get(RocksCFName.INDEX, dk, key));
-    }
-    
-    @Test
-    public void secondaryInstanceTest() {
-        System.out.println("Hello from SecondaryInstanceTest");
     }
 }
