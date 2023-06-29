@@ -4,7 +4,7 @@ ARG TARGETPLATFORM
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y openjdk-8-jdk-headless wget build-essential git && \
+    apt-get install -y openjdk-8-jdk-headless wget build-essential git tmux python2 vim && \
     wget https://dlcdn.apache.org//ant/binaries/apache-ant-1.10.13-bin.tar.gz && \
     tar -xzf apache-ant-1.10.13-bin.tar.gz && \
     mv apache-ant-1.10.13 /opt/ant && \
